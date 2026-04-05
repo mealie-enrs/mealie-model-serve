@@ -21,7 +21,7 @@ infra/k8s/          # k3s / Kubernetes (same stack as Docker Compose)
 
 ## Kubernetes on Chameleon (k3s VM, e.g. after SSH to your server)
 
-See **`infra/k8s/DEPLOY.md`**: build/push images, apply secrets, then `kubectl apply -k infra/k8s/`.
+See **`infra/k8s/DEPLOY.md`**: build/push images, apply secrets, then `kubectl apply -k infra/k8s/` (in-cluster MinIO) or **`infra/k8s/overlays/chameleon-s3`** for Swift / S3 artifacts (`serve/` prefix in your container). Pushes to **`main`** / **`master`** run **`.github/workflows/deploy.yml`**: build → GHCR → SSH apply kustomize → roll out images on the VM.
 
 Provisioning a **dedicated MMS VM** (FIP + SG + k3s cloud-init): **`infra/terraform/`** in this package (`terraform init` / `apply` there). The root **`mealie/infra/terraform`** stack is the DMS-oriented variant. Workloads are still **kubectl/kustomize**, not Terraform, unless you add a Kubernetes provider.
 
