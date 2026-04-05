@@ -109,7 +109,9 @@ jobs:
         run: |
           KEYFILE="${RUNNER_TEMP}/gha_deploy_key"
           if [ -n "${SSH_PRIVATE_KEY_B64:-}" ]; then
-            printf '%s' "$SSH_PRIVATE_KEY_B64" | base64 -d > "$KEYFILE"
+            # Strip spaces / line breaks — pasted B64 must be one continuous string
+            B64_CLEAN=$(printf '%s' "$SSH_PRIVATE_KEY_B64" | tr -d ' \n\r\t')
+            printf '%s' "$B64_CLEAN" | base64 -d > "$KEYFILE"
           elif [ -n "${SSH_PRIVATE_KEY:-}" ]; then
             printf '%s\n' "$SSH_PRIVATE_KEY" > "$KEYFILE"
           else
@@ -126,6 +128,9 @@ jobs:
             exit 1
           }
           echo "keyfile=$KEYFILE" >> "$GITHUB_OUTPUT"
+
+      - name: SSH key fingerprint (must match your gha-mms-deploy.pub on the VM)
+        run: ssh-keygen -lf "${{ steps.sshkey.outputs.keyfile }}"
 
       - name: Deploy via SSH (kubectl set image)
         uses: appleboy/ssh-action@v1.2.0
