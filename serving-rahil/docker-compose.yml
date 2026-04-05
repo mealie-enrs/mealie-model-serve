@@ -1,0 +1,115 @@
+# serving-rahil/docker-compose.yml
+#
+# All 4 serving configurations for Mealie ML serving role (Rahil Shaikh).
+# Each service maps to one row in the Q2.1 serving options table.
+#
+# Prerequisites (on Chameleon GPU instance):
+#   nvidia-container-toolkit installed and Docker restarted
+#   docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
+#
+# Build all images (run from repo root):
+#   docker compose -f serving-rahil/docker-compose.yml build
+#
+# Start all 4 configs:
+#   docker compose -f serving-rahil/docker-compose.yml up -d
+#
+# Check all running:
+#   docker compose -f serving-rahil/docker-compose.yml ps
+#
+# Benchmark each (run from repo root after containers are up):
+#   python eval/benchmark.py --url http://localhost:8000/predict --option baseline_pytorch --n 200 --concurrency 1
+#   python eval/benchmark.py --url http://localhost:8001/predict --option onnx_graph_opt   --n 200 --concurrency 4
+#   python eval/benchmark.py --url http://localhost:8002/predict --option onnx_quantized   --n 200 --concurrency 4
+#   python eval/benchmark.py --url http://localhost:8003/predict --option onnx_cuda        --n 200 --concurrency 8
+#
+# Stop all:
+#   docker compose -f serving-rahil/docker-compose.yml down
+#
+# Assisted by Claude (Anthropic)
+
+name: mealie-rahil-serving
+
+services:
+
+  # Config 1: baseline_pytorch 
+  # Raw PyTorch eager mode on CPU. No ONNX, no optimization.
+  # Establishes reference latency for all other configs to improve on.
+  baseline:
+    build:
+      context: ..
+      dockerfile: serving-rahil/Dockerfile.baseline
+    image: mealie-serving-baseline:latest
+    container_name: mealie-baseline
+    ports:
+      - "8000:8000"
+    environment:
+      MODEL_VERSION: efficientnet-b0-imagenet-v1
+      SERVING_OPTION_ID: baseline_pytorch
+      BYPASS_INFERENCE_GATE: "1"
+      CONFIDENCE_THRESHOLD: "0.6"
+    restart: unless-stopped
+
+  # Config 2: onnx_graph_opt
+  # Model-level optimization: ONNX export + ORT_ENABLE_EXTENDED graph optimization.
+  # Fuses Conv+BN, eliminates Dropout/Identity nodes, applies constant folding.
+  # Same CPU hardware as baseline — isolates model-level optimization benefit.
+  onnx-graph:
+    build:
+      context: ..
+      dockerfile: serving-rahil/Dockerfile.onnx_graph
+    image: mealie-serving-onnx-graph:latest
+    container_name: mealie-onnx-graph
+    ports:
+      - "8001:8000"
+    environment:
+      MODEL_VERSION: efficientnet-b0-onnx-graph-opt-v1
+      SERVING_OPTION_ID: onnx_graph_opt
+      BYPASS_INFERENCE_GATE: "1"
+      CONFIDENCE_THRESHOLD: "0.6"
+    restart: unless-stopped
+
+  # Config 3: onnx_quantized 
+  # Model-level optimization: ONNX + INT8 dynamic quantization.
+  # Weights stored in INT8 — smaller model, faster linear ops on CPU.
+  # Activation quantization happens at runtime (no calibration dataset needed).
+  onnx-quantized:
+    build:
+      context: ..
+      dockerfile: serving-rahil/Dockerfile.onnx_quantized
+    image: mealie-serving-onnx-quantized:latest
+    container_name: mealie-onnx-quantized
+    ports:
+      - "8002:8000"
+    environment:
+      MODEL_VERSION: efficientnet-b0-onnx-int8-v1
+      SERVING_OPTION_ID: onnx_quantized
+      BYPASS_INFERENCE_GATE: "1"
+      CONFIDENCE_THRESHOLD: "0.6"
+    restart: unless-stopped
+
+  # Config 4: onnx_cuda ; Most Promising 
+  # Combined optimization: ONNX + CUDAExecutionProvider + graph optimization.
+  # Uses Quadro RTX 6000 (24GB VRAM) on Chameleon nc33 node.
+  # CUDA kernels replace CPU kernels — GPU parallelism for all tensor ops.
+  # Expected to have lowest latency of all 4 configs.
+  onnx-cuda:
+    build:
+      context: ..
+      dockerfile: serving-rahil/Dockerfile.onnx_cuda
+    image: mealie-serving-onnx-cuda:latest
+    container_name: mealie-onnx-cuda
+    ports:
+      - "8003:8000"
+    environment:
+      MODEL_VERSION: efficientnet-b0-onnx-cuda-v1
+      SERVING_OPTION_ID: onnx_cuda
+      BYPASS_INFERENCE_GATE: "1"
+      CONFIDENCE_THRESHOLD: "0.6"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
