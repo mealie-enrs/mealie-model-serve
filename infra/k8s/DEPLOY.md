@@ -117,19 +117,19 @@ resource "openstack_networking_secgroup_rule_v2" "mms_api" {
 
 Chameleon’s object store is **Swift** with an **S3-compatible API** on port **7480**. MLflow and this repo’s code use **boto3** (`MLFLOW_S3_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`), same as MinIO.
 
-### Folder layout in your container (`serving` as logical root)
+### Folder layout in your container (`serve/` as team root)
 
 Pick one **Swift container** name — that becomes the **S3 bucket** name (e.g. `proj26-obj-store`). There are no real nested folders; `/` is a **prefix** inside object keys.
 
 Example artifact root:
 
-`s3://proj26-obj-store/serving/mlflow-artifacts`
+`s3://proj26-obj-store/serve/mlflow-artifacts`
 
 After MLflow runs, keys look like:
 
 ```text
 proj26-obj-store   (Swift container = S3 bucket)
-└── serving/
+└── serve/
     └── mlflow-artifacts/
         └── <experiment_id>/
             └── <run_id>/
@@ -138,11 +138,11 @@ proj26-obj-store   (Swift container = S3 bucket)
                         └── ...
 ```
 
-Optional: add other prefixes under `serving/` for non-MLflow data (e.g. `serving/exports/...`) using the same bucket and your own tooling.
+Add other prefixes under **`serve/`** for non-MLflow data (e.g. `serve/exports/...`) in the same bucket.
 
 Set this in the overlay ConfigMap patch as:
 
-`MLFLOW_ARTIFACTS_DESTINATION: s3://<container>/serving/mlflow-artifacts`
+`MLFLOW_ARTIFACTS_DESTINATION: s3://<container>/serve/mlflow-artifacts`
 
 ### Region endpoints
 

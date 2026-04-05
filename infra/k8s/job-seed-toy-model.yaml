@@ -1,5 +1,7 @@
 # One-shot: register toy ONNX as food-classifier@staging so model-serve /readyz passes.
-# Apply after MLflow is up: kubectl apply -f job-seed-toy-model.yaml && kubectl -n mms wait --for=condition=complete job/mms-seed-toy-model --timeout=300s
+# Kubernetes Jobs are immutable: to re-apply after template changes, delete first:
+#   kubectl -n mms delete job mms-seed-toy-model --ignore-not-found
+# Then: kubectl apply -f job-seed-toy-model.yaml && kubectl -n mms wait --for=condition=complete job/mms-seed-toy-model --timeout=300s
 apiVersion: batch/v1
 kind: Job
 metadata:

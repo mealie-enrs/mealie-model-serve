@@ -48,6 +48,16 @@ patches:
       name: mms-mlflow
       namespace: mms
     patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: ARTIFACT_STORE_WAIT_MODE
+          value: "s3"
+  - target:
+      kind: Deployment
+      name: mms-mlflow
+      namespace: mms
+    patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: IfNotPresent

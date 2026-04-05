@@ -11,8 +11,11 @@
 #   GHCR_PULL_TOKEN      PAT with read:packages; each deploy recreates secret ghcr-pull + patches imagePullSecrets.
 #   GHCR_PULL_USERNAME   GitHub username for that PAT (PAT owner, e.g. nidhish1 — not the org name).
 #
-# Prerequisite: MMS workloads applied once (kubectl apply -k …).
-# This workflow only updates image digests for the two app deployments.
+# Applies infra/k8s/overlays/<MMS_KUSTOMIZE_OVERLAY> on the VM (ConfigMap, Deployments, Job, etc.),
+# then sets MLflow/API images to the GHCR tags built in this run.
+#
+# Kubernetes secret mms-secrets must exist on the cluster (not in git). Apply once on the VM, e.g.:
+#   sudo k3s kubectl apply -f /tmp/mms-secrets.yaml
 #
 name: Build and deploy
 
@@ -28,6 +31,8 @@ concurrency:
 env:
   IMAGE_MLFLOW: mealie-model-serve-mlflow
   IMAGE_API: mealie-model-serve-api
+  # Kustomize overlay under infra/k8s/overlays/ (no MinIO → Chameleon S3).
+  MMS_KUSTOMIZE_OVERLAY: chameleon-s3
 
 jobs:
   build-and-push:
@@ -89,6 +94,12 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.31.0
+
       - name: Check SSH host and user
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
@@ -131,6 +142,19 @@ jobs:
 
       - name: SSH key fingerprint (must match your gha-mms-deploy.pub on the VM)
         run: ssh-keygen -lf "${{ steps.sshkey.outputs.keyfile }}"
+
+      - name: Apply Kubernetes manifests on VM (kustomize)
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -euo pipefail
+          KEY="${{ steps.sshkey.outputs.keyfile }}"
+          OVERLAY="infra/k8s/overlays/${{ env.MMS_KUSTOMIZE_OVERLAY }}"
+          test -d "$OVERLAY"
+          kubectl kustomize "$OVERLAY" --load-restrictor LoadRestrictionsNone | \
+            ssh -i "$KEY" -o StrictHostKeyChecking=accept-new "${SSH_USER}@${SSH_HOST}" \
+              'sudo k3s kubectl delete job mms-seed-toy-model -n mms --ignore-not-found; sudo k3s kubectl apply -f -'
 
       - name: Deploy via SSH (kubectl set image)
         uses: appleboy/ssh-action@v1.2.0

@@ -27,6 +27,10 @@ def _use_minio_healthcheck(endpoint: str) -> bool:
         return True
     if mode == "s3":
         return False
+    el = endpoint.lower()
+    # Chameleon / RGW S3 — never use MinIO's /minio/health/live endpoint.
+    if ":7480" in el or "chameleoncloud.org" in el:
+        return False
     host = (urlparse(endpoint).hostname or "").lower()
     return host in ("minio", "127.0.0.1", "localhost")
 
