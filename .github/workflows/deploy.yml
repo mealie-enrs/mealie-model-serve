@@ -100,11 +100,8 @@ jobs:
             echo "::error::Add repository secrets (Settings → Secrets and variables → Actions):$missing"
             exit 1
           fi
-      - name: Check SSH private key secret exists
-        if: ${{ secrets.SSH_PRIVATE_KEY == '' }}
-        run: |
-          echo "::error::Add repository secret SSH_PRIVATE_KEY (full multiline OpenSSH private key)"
-          exit 1
+      # SSH_PRIVATE_KEY cannot be checked in `if:` (secrets disallowed there) or in bash (multiline breaks).
+      # If the key is missing, appleboy/ssh-action fails with an auth error.
 
       - name: Deploy via SSH (kubectl set image)
         uses: appleboy/ssh-action@v1.2.0
