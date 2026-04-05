@@ -220,9 +220,26 @@ Optional (only if GHCR packages are **private**):
 
 Apply manifests once (MinIO or Chameleon overlay) so **`Deployment/mms-mlflow`** and **`Deployment/mms-model-serve`** exist. The pipeline only swaps images.
 
-### Private GHCR: imagePullSecrets
+### Automating private GHCR (recommended)
 
-Create the secret is automated when `GHCR_PULL_TOKEN` is set. You still need **`imagePullSecrets`** on both Deployments once, for example:
+1. **GitHub Actions secrets** **`GHCR_PULL_TOKEN`** + **`GHCR_PULL_USERNAME`** (PAT owner, `read:packages`, SSO authorized for the org if needed).  
+   Every deploy then **recreates `ghcr-pull`** and **patches `imagePullSecrets`** on `mms-mlflow` and `mms-model-serve` — safe for a **new VM** or after **`kubectl apply`** resets.
+
+2. **New cluster / manual bootstrap** (after `kubectl apply -k infra/k8s/` and workloads exist):
+
+   ```bash
+   export GHCR_USERNAME=nidhish1
+   read -s GHCR_PAT && echo
+   KUBECTL="sudo k3s kubectl" ./scripts/k8s-bootstrap-ghcr-auth.sh
+   ```
+
+3. **Bake `imagePullSecrets` into Git** (optional): add **`patches/ghcr-imagepull.yaml`** to **`infra/k8s/kustomization.yaml`** under `patches:` (see comment in that file). You must create **`ghcr-pull`** before pods schedule, or they stay pending.
+
+4. **Public GHCR packages** → skip pull secret entirely (simplest for class projects).
+
+### Private GHCR: imagePullSecrets (manual one-liner)
+
+If you do **not** use `GHCR_PULL_TOKEN` in Actions, patch once (or use `scripts/k8s-bootstrap-ghcr-auth.sh`):
 
 ```bash
 kubectl patch deployment mms-mlflow -n mms --type=strategic -p \

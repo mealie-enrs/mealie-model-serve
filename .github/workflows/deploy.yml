@@ -7,9 +7,9 @@
 #                            base64 < ~/.ssh/gha-mms-deploy | tr -d '\n'  → paste into secret
 #   SSH_PRIVATE_KEY          Optional fallback: multiline PEM (often fails with ssh-action `key:`)
 #
-# Optional:
-#   GHCR_PULL_TOKEN      PAT with read:packages if images are private (creates secret ghcr-pull in mms).
-#   GHCR_PULL_USERNAME   GitHub username for that PAT (default: lowercase repo owner — same as GHCR path).
+# Optional (private GHCR — recommended):
+#   GHCR_PULL_TOKEN      PAT with read:packages; each deploy recreates secret ghcr-pull + patches imagePullSecrets.
+#   GHCR_PULL_USERNAME   GitHub username for that PAT (PAT owner, e.g. nidhish1 — not the org name).
 #
 # Prerequisite: MMS workloads applied once (kubectl apply -k …).
 # This workflow only updates image digests for the two app deployments.
@@ -152,13 +152,17 @@ jobs:
             MLF_IMG="${REG}/mealie-model-serve-mlflow:${TAG}"
             DOCKER_USER="${GHCR_PULL_USERNAME:-$OWNER_LC}"
 
-            # Private GHCR: create pull secret (add imagePullSecrets to both Deployments once — see DEPLOY.md).
+            # Private GHCR: refresh pull secret + ensure imagePullSecrets on every deploy (new server safe).
             if [ -n "${GHCR_PULL_TOKEN:-}" ]; then
               sudo k3s kubectl create secret docker-registry ghcr-pull \
                 --docker-server=ghcr.io \
                 --docker-username="${DOCKER_USER}" \
                 --docker-password="${GHCR_PULL_TOKEN}" \
                 -n "${NS}" --dry-run=client -o yaml | sudo k3s kubectl apply -f -
+              for d in mms-mlflow mms-model-serve; do
+                sudo k3s kubectl patch deployment "$d" -n "${NS}" --type=strategic -p \
+                  '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"ghcr-pull"}]}}}}' || true
+              done
             fi
 
             sudo k3s kubectl set image deployment/mms-mlflow mlflow="${MLF_IMG}" -n "${NS}"

@@ -17,6 +17,8 @@ images:
   - name: ghcr.io/your-org/mealie-model-serve-api
     newName: mealie-model-serve-api
     newTag: latest
+# Optional (private GHCR): add after creating Secret ghcr-pull in mms:
+#   - path: patches/ghcr-imagepull.yaml
 patches:
   - target:
       kind: Deployment
