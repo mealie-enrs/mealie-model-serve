@@ -28,6 +28,7 @@ images:
     newTag: latest
 patches:
   - path: patch-hostnetwork-egress.yaml
+  - path: patch-deployment-recreate.yaml
   - path: patch-hostaliases-chi-uc.yaml
   - path: patch-config-chameleon.yaml
   - target:
