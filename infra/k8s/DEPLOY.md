@@ -204,7 +204,8 @@ Workflow: **`.github/workflows/deploy.yml`**. On every push to **`main`**, it bu
 |--------|--------|
 | `SSH_HOST` | VM floating IP (e.g. `192.5.86.170`) |
 | `SSH_USER` | Login user (e.g. `cc`) |
-| `SSH_PRIVATE_KEY` | Private key PEM that can SSH as that user |
+| `SSH_PRIVATE_KEY_B64` | **Recommended:** one-line base64 of the private key: `base64 < ~/.ssh/gha-mms-deploy \| tr -d '\n'` then paste into the secret |
+| `SSH_PRIVATE_KEY` | Optional fallback: multiline PEM (if SSH still fails, use B64 only) |
 
 Optional (only if GHCR packages are **private**):
 

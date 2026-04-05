@@ -1,9 +1,11 @@
 # Build Docker images → push to GHCR → roll out on your k3s VM over SSH.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
-#   SSH_HOST          e.g. 192.5.86.170
-#   SSH_USER          e.g. cc
-#   SSH_PRIVATE_KEY   PEM for that user (full key including BEGIN/END lines)
+#   SSH_HOST                 e.g. 192.5.86.170
+#   SSH_USER                 e.g. cc
+#   SSH_PRIVATE_KEY_B64      Recommended: one-line base64 of the private key:
+#                            base64 < ~/.ssh/gha-mms-deploy | tr -d '\n'  → paste into secret
+#   SSH_PRIVATE_KEY          Optional fallback: multiline PEM (often fails with ssh-action `key:`)
 #
 # Optional:
 #   GHCR_PULL_TOKEN      PAT with read:packages if images are private (creates secret ghcr-pull in mms).
@@ -87,7 +89,6 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      # Do not interpolate SSH_PRIVATE_KEY into a `run:` script — multiline keys break bash and look "empty".
       - name: Check SSH host and user
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
@@ -100,8 +101,31 @@ jobs:
             echo "::error::Add repository secrets (Settings → Secrets and variables → Actions):$missing"
             exit 1
           fi
-      # SSH_PRIVATE_KEY cannot be checked in `if:` (secrets disallowed there) or in bash (multiline breaks).
-      # If the key is missing, appleboy/ssh-action fails with an auth error.
+      - name: Prepare SSH private key file
+        id: sshkey
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY_B64: ${{ secrets.SSH_PRIVATE_KEY_B64 }}
+        run: |
+          KEYFILE="${RUNNER_TEMP}/gha_deploy_key"
+          if [ -n "${SSH_PRIVATE_KEY_B64:-}" ]; then
+            printf '%s' "$SSH_PRIVATE_KEY_B64" | base64 -d > "$KEYFILE"
+          elif [ -n "${SSH_PRIVATE_KEY:-}" ]; then
+            printf '%s\n' "$SSH_PRIVATE_KEY" > "$KEYFILE"
+          else
+            echo "::error::Add SSH_PRIVATE_KEY_B64 (recommended) or SSH_PRIVATE_KEY. See workflow header comment."
+            exit 1
+          fi
+          chmod 600 "$KEYFILE"
+          if [ ! -s "$KEYFILE" ]; then
+            echo "::error::SSH key file is empty (bad base64 or empty secret)"
+            exit 1
+          fi
+          head -1 "$KEYFILE" | grep -q 'BEGIN.*PRIVATE KEY' || {
+            echo "::error::Key file does not look like PEM (first line should be -----BEGIN ... PRIVATE KEY-----)"
+            exit 1
+          }
+          echo "keyfile=$KEYFILE" >> "$GITHUB_OUTPUT"
 
       - name: Deploy via SSH (kubectl set image)
         uses: appleboy/ssh-action@v1.2.0
@@ -114,7 +138,7 @@ jobs:
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key_path: ${{ steps.sshkey.outputs.keyfile }}
           envs: OWNER_LC,TAG,NS,GHCR_PULL_TOKEN,GHCR_PULL_USERNAME
           script: |
             set -euo pipefail
