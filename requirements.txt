@@ -1,0 +1,16 @@
+# Control plane / trainer / ops (MLflow client)
+mlflow==2.19.0
+psycopg2-binary==2.9.10
+boto3==1.35.99
+numpy==1.26.4
+scikit-learn==1.5.2
+skl2onnx==1.17.0
+onnx==1.17.0
+
+# Serving
+fastapi==0.115.12
+uvicorn[standard]==0.34.0
+pydantic-settings==2.8.1
+onnxruntime==1.20.1
+prometheus-client==0.21.1
+httpx==0.28.1

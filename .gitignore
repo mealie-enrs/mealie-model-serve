@@ -1,0 +1,32 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+!.env.example
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
+*.log
+dist/
+build/
+.coverage
+coverage.xml
+htmlcov/
+.ipynb_checkpoints/
+eval/*.json
+infra/k8s/mms-secrets.yaml
+
+# Local ML experiment tracking / artifacts
+mlruns/
+wandb/
+
+# Terraform (mealie-model-serve/infra/terraform)
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/terraform.tfvars
+infra/terraform/crash.log
+infra/terraform/crash.*.log

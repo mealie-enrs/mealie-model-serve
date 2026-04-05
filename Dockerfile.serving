@@ -1,0 +1,27 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+
+ARG GIT_SHA=unknown
+ENV BUILD_SHA=${GIT_SHA}
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir \
+    mlflow==2.19.0 boto3==1.35.99 \
+    fastapi==0.115.12 "uvicorn[standard]==0.34.0" pydantic-settings==2.8.1 \
+    onnxruntime==1.20.1 prometheus-client==0.21.1 onnx==1.17.0 numpy==1.26.4 \
+    httpx==0.28.1
+
+COPY serving ./serving
+COPY scripts/docker-entrypoint-serving.sh /app/scripts/docker-entrypoint-serving.sh
+COPY scripts/evaluate_serving.py /app/scripts/evaluate_serving.py
+RUN chmod +x /app/scripts/docker-entrypoint-serving.sh
+
+EXPOSE 8080
+ENV PORT=8080
+ENTRYPOINT ["/app/scripts/docker-entrypoint-serving.sh"]
