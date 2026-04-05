@@ -168,6 +168,8 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key_path: ${{ steps.sshkey.outputs.keyfile }}
+          # Default 10m is shorter than MLflow (600s) + model-serve (400s) rollouts.
+          command_timeout: 25m
           envs: OWNER_LC,TAG,NS,GHCR_PULL_TOKEN,GHCR_PULL_USERNAME
           script: |
             set -euo pipefail
