@@ -9,7 +9,7 @@
 #   GHCR_PULL_TOKEN      PAT with read:packages if images are private (creates secret ghcr-pull in mms).
 #   GHCR_PULL_USERNAME   GitHub username for that PAT (default: lowercase repo owner — same as GHCR path).
 #
-# Prerequisite on the cluster: MMS workloads already applied once (kubectl apply -k …).
+# Prerequisite: MMS workloads applied once (kubectl apply -k …).
 # This workflow only updates image digests for the two app deployments.
 #
 name: Build and deploy
