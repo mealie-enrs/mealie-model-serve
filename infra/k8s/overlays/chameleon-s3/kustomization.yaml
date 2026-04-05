@@ -27,6 +27,8 @@ images:
     newName: mealie-model-serve-api
     newTag: latest
 patches:
+  - path: patch-hostnetwork-egress.yaml
+  - path: patch-hostaliases-chi-uc.yaml
   - path: patch-config-chameleon.yaml
   - target:
       kind: Deployment

@@ -192,5 +192,12 @@ jobs:
             sudo k3s kubectl set image deployment/mms-mlflow mlflow="${MLF_IMG}" -n "${NS}"
             sudo k3s kubectl set image deployment/mms-model-serve model-serve="${API_IMG}" -n "${NS}"
 
-            sudo k3s kubectl rollout status deployment/mms-mlflow -n "${NS}" --timeout=400s
+            # MLflow pulls artifacts / waits on S3 — allow longer than the API deployment.
+            if ! sudo k3s kubectl rollout status deployment/mms-mlflow -n "${NS}" --timeout=600s; then
+              echo "::error::mms-mlflow rollout timed out — check pod events and logs on the VM"
+              sudo k3s kubectl get pods -n "${NS}" -o wide
+              sudo k3s kubectl describe deployment/mms-mlflow -n "${NS}" | tail -n 40
+              sudo k3s kubectl logs -n "${NS}" -l app=mms-mlflow --tail=80 --all-containers=true || true
+              exit 1
+            fi
             sudo k3s kubectl rollout status deployment/mms-model-serve -n "${NS}" --timeout=400s

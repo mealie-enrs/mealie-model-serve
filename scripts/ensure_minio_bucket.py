@@ -27,6 +27,10 @@ def _use_minio_healthcheck(endpoint: str) -> bool:
         return True
     if mode == "s3":
         return False
+    # Swift container name in artifact URI → use S3 API, not /minio/health/live.
+    art = os.environ.get("MLFLOW_ARTIFACTS_DESTINATION", "")
+    if "proj26-obj-store" in art:
+        return False
     el = endpoint.lower()
     # Chameleon / RGW S3 — never use MinIO's /minio/health/live endpoint.
     if ":7480" in el or "chameleoncloud.org" in el:
