@@ -66,6 +66,10 @@ spec:
                   key: MINIO_ROOT_PASSWORD
             - name: AWS_DEFAULT_REGION
               value: "us-east-1"
+            - name: AWS_REQUEST_CHECKSUM_CALCULATION
+              value: "WHEN_REQUIRED"
+            - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+              value: "WHEN_REQUIRED"
             - name: MODEL_URI
               valueFrom:
                 configMapKeyRef:

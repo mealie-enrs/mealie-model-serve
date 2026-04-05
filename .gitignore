@@ -18,6 +18,7 @@ htmlcov/
 .ipynb_checkpoints/
 eval/*.json
 infra/k8s/mms-secrets.yaml
+secrets/
 
 # Local ML experiment tracking / artifacts
 mlruns/

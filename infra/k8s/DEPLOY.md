@@ -113,6 +113,131 @@ resource "openstack_networking_secgroup_rule_v2" "mms_api" {
 
 ---
 
+## Chameleon object store (S3 API) instead of MinIO
+
+Chameleon’s object store is **Swift** with an **S3-compatible API** on port **7480**. MLflow and this repo’s code use **boto3** (`MLFLOW_S3_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`), same as MinIO.
+
+### Folder layout in your container (`serving` as logical root)
+
+Pick one **Swift container** name — that becomes the **S3 bucket** name (e.g. `proj26-obj-store`). There are no real nested folders; `/` is a **prefix** inside object keys.
+
+Example artifact root:
+
+`s3://proj26-obj-store/serving/mlflow-artifacts`
+
+After MLflow runs, keys look like:
+
+```text
+proj26-obj-store   (Swift container = S3 bucket)
+└── serving/
+    └── mlflow-artifacts/
+        └── <experiment_id>/
+            └── <run_id>/
+                └── artifacts/
+                    └── model/
+                        └── ...
+```
+
+Optional: add other prefixes under `serving/` for non-MLflow data (e.g. `serving/exports/...`) using the same bucket and your own tooling.
+
+Set this in the overlay ConfigMap patch as:
+
+`MLFLOW_ARTIFACTS_DESTINATION: s3://<container>/serving/mlflow-artifacts`
+
+### Region endpoints
+
+- **CHI@UC:** `https://chi.uc.chameleoncloud.org:7480`
+- **CHI@TACC:** `https://chi.tacc.chameleoncloud.org:7480`
+
+### Credentials (not OpenStack password)
+
+Create **EC2 / S3** credentials (used by boto3):
+
+```bash
+source ~/secrets/app-cred-nidhish-mac-openrc.sh   # or your RC file
+openstack ec2 credentials create
+```
+
+Put the **Access** string in Kubernetes secret key **`MINIO_ROOT_USER`** and the **Secret** string in **`MINIO_ROOT_PASSWORD`** (the manifests map those to `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`).
+
+### Swift container must exist
+
+```bash
+openstack container create proj26-obj-store   # if it does not exist yet
+```
+
+The startup script will call S3 **`CreateBucket`** if the bucket is missing; on Chameleon it is safer to create the container explicitly if you hit permission quirks.
+
+### Deploy overlay (no MinIO pod)
+
+1. Edit **`infra/k8s/overlays/chameleon-s3/patch-config-chameleon.yaml`**: set your Swift container name and the correct **7480** URL for your site (UC vs TACC).
+2. Apply secrets (Postgres password + EC2 keys as above).
+3. Build and apply (the overlay references parent YAML; use relaxed load rules or pipe):
+
+```bash
+kubectl kustomize infra/k8s/overlays/chameleon-s3 \
+  --load-restrictor LoadRestrictionsNone | kubectl apply -f -
+```
+
+From the repo root; run against the same path on your machine.
+
+### boto3 + Ceph checksum quirk
+
+Manifests set **`AWS_REQUEST_CHECKSUM_CALCULATION=WHEN_REQUIRED`** and **`AWS_RESPONSE_CHECKSUM_VALIDATION=WHEN_REQUIRED`** on MLflow, model-serve, and the seed Job to avoid **`MissingContentLength`** issues with Chameleon’s S3 gateway (see community reports for MLflow + Chameleon). The repo pins **boto3 1.35.x** in images for the same reason.
+
+### Local Docker Compose
+
+Point **`MLFLOW_S3_ENDPOINT_URL`** at the **7480** URL, set **`MLFLOW_ARTIFACTS_DESTINATION`** like above, and export the same EC2 access/secret as **`AWS_ACCESS_KEY_ID`** / **`AWS_SECRET_ACCESS_KEY`**. For in-cluster MinIO, leave the default compose files as they are.
+
+---
+
+## GitHub Actions (build → GHCR → k3s)
+
+Workflow: **`.github/workflows/deploy.yml`**. On every push to **`main`**, it builds **`linux/amd64`** images, pushes to **`ghcr.io/<lowercase-github-owner>/mealie-model-serve-{mlflow,api}`** (tags **`:<12-char-sha>`** and **`:latest`**), then SSHes to your VM and runs **`kubectl set image`** for `mms-mlflow` and `mms-model-serve` in namespace **`mms`**.
+
+### One-time: GitHub repo settings
+
+1. **Actions → General → Workflow permissions:** allow **Read and write** (so `GITHUB_TOKEN` can push packages).
+2. **Repository secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Purpose |
+|--------|--------|
+| `SSH_HOST` | VM floating IP (e.g. `192.5.86.170`) |
+| `SSH_USER` | Login user (e.g. `cc`) |
+| `SSH_PRIVATE_KEY` | Private key PEM that can SSH as that user |
+
+Optional (only if GHCR packages are **private**):
+
+| Secret | Purpose |
+|--------|--------|
+| `GHCR_PULL_TOKEN` | PAT with **`read:packages`** |
+| `GHCR_PULL_USERNAME` | GitHub username that owns the PAT (defaults to lowercase owner if unset) |
+
+3. After the first workflow run, open **Packages** on GitHub and set **`mealie-model-serve-api` / `mealie-model-serve-mlflow`** to **Public** if you want pulls without a cluster pull secret.
+
+### One-time: cluster must already run MMS
+
+Apply manifests once (MinIO or Chameleon overlay) so **`Deployment/mms-mlflow`** and **`Deployment/mms-model-serve`** exist. The pipeline only swaps images.
+
+### Private GHCR: imagePullSecrets
+
+Create the secret is automated when `GHCR_PULL_TOKEN` is set. You still need **`imagePullSecrets`** on both Deployments once, for example:
+
+```bash
+kubectl patch deployment mms-mlflow -n mms --type=strategic -p \
+  '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"ghcr-pull"}]}}}}'
+kubectl patch deployment mms-model-serve -n mms --type=strategic -p \
+  '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"ghcr-pull"}]}}}}'
+```
+
+(Use `sudo k3s kubectl` on the VM if that is how you manage the cluster.)
+
+### SSH and sudo
+
+The workflow runs **`sudo k3s kubectl`** on the VM. Your user must have **passwordless sudo** (default on many Chameleon images).
+
+---
+
 ## Troubleshooting
 
 - **`ImagePullBackOff`:** set `imagePullSecrets` for GHCR or import images on the node.  
