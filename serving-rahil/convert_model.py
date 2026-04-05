@@ -101,7 +101,6 @@ def quantize_to_int8(fp32_path: Path, output_dir: Path) -> Path:
       - For EfficientNet specifically, static quantization with calibration
         data would give better results but requires Recipe1M images
 
-    Lab reference: serve-model-chi section 4 (dynamic quantization)
     """
     from onnxruntime.quantization import QuantType, quantize_dynamic
 
@@ -111,7 +110,7 @@ def quantize_to_int8(fp32_path: Path, output_dir: Path) -> Path:
     quantize_dynamic(
         model_input=str(fp32_path),
         model_output=str(int8_path),
-        weight_type=QuantType.QInt8,
+        weight_type=QuantType.QUInt8,
     )
 
     size_mb = int8_path.stat().st_size / 1_000_000
