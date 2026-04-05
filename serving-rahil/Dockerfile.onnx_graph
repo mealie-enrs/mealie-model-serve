@@ -1,0 +1,66 @@
+# serving-rahil/Dockerfile.onnx_graph
+#
+# Serving config: onnx_graph_opt
+# Hardware: CPU
+# Optimization: Model-level — ONNX export + ORT_ENABLE_EXTENDED graph optimization
+#
+# Two-stage setup:
+#   Stage 1 (build): PyTorch present to run convert_model.py → exports ONNX
+#   Stage 2 (serve): Only onnxruntime (no PyTorch) → lean runtime image
+#
+# Build:
+#   docker build -f serving-rahil/Dockerfile.onnx_graph -t mealie-onnx-graph .
+#
+# Run:
+#   docker run -e BYPASS_INFERENCE_GATE=1 -p 8001:8000 mealie-onnx-graph
+
+FROM python:3.10-slim AS converter
+
+WORKDIR /build
+
+# Install PyTorch + ONNX tools for model conversion only
+RUN pip install --no-cache-dir \
+    torch==2.3.1 \
+    torchvision==0.18.1 \
+    --index-url https://download.pytorch.org/whl/cpu
+
+RUN pip install --no-cache-dir \
+    onnx==1.16.0 \
+    onnxruntime==1.18.0 \
+    numpy==1.26.4
+
+COPY serving-rahil/convert_model.py convert_model.py
+
+# Run conversion: produces /models/efficientnet_b0.onnx
+RUN python convert_model.py --output-dir /models --skip-quantization
+
+
+# Runtime stage (lean — no PyTorch) 
+FROM python:3.10-slim AS runtime
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir \
+    onnxruntime==1.18.0 \
+    fastapi==0.111.0 \
+    "uvicorn[standard]==0.30.0" \
+    Pillow==10.3.0 \
+    pydantic==2.7.1 \
+    numpy==1.26.4
+
+# Copy ONNX model from converter stage
+COPY --from=converter /models/efficientnet_b0.onnx /models/efficientnet_b0.onnx
+
+# Copy serving code
+COPY serving-rahil/app_onnx_graph.py app.py
+COPY serving-rahil/recipe_assembler.py recipe_assembler.py
+
+ENV MODEL_PATH=/models/efficientnet_b0.onnx
+ENV MODEL_VERSION=efficientnet-b0-onnx-graph-opt-v1
+ENV SERVING_OPTION_ID=onnx_graph_opt
+ENV BYPASS_INFERENCE_GATE=0
+ENV CONFIDENCE_THRESHOLD=0.6
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
