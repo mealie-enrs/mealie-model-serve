@@ -87,16 +87,24 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Check SSH secrets
+      # Do not interpolate SSH_PRIVATE_KEY into a `run:` script — multiline keys break bash and look "empty".
+      - name: Check SSH host and user
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
         run: |
           missing=
-          [ -z "${{ secrets.SSH_HOST }}" ] && missing="${missing} SSH_HOST"
-          [ -z "${{ secrets.SSH_USER }}" ] && missing="${missing} SSH_USER"
-          [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ] && missing="${missing} SSH_PRIVATE_KEY"
+          [ -z "$SSH_HOST" ] && missing="${missing} SSH_HOST"
+          [ -z "$SSH_USER" ] && missing="${missing} SSH_USER"
           if [ -n "$missing" ]; then
             echo "::error::Add repository secrets (Settings → Secrets and variables → Actions):$missing"
             exit 1
           fi
+      - name: Check SSH private key secret exists
+        if: ${{ secrets.SSH_PRIVATE_KEY == '' }}
+        run: |
+          echo "::error::Add repository secret SSH_PRIVATE_KEY (full multiline OpenSSH private key)"
+          exit 1
 
       - name: Deploy via SSH (kubectl set image)
         uses: appleboy/ssh-action@v1.2.0
