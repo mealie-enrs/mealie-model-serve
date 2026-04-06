@@ -1,0 +1,73 @@
+# serving-rahil/Dockerfile.onnx_cuda
+#
+# Serving config: onnx_cuda
+# Hardware: GPU — Quadro RTX 6000 (24GB VRAM), CUDA 12.8
+# Optimization: Combined — ONNX + CUDAExecutionProvider + graph optimization
+#
+# Base image: CUDA 12.1 runtime (compatible with driver 570 / CUDA 12.8 on nc33)
+# onnxruntime-gpu provides CUDAExecutionProvider.
+#
+# Build:
+#   docker build -f serving-rahil/Dockerfile.onnx_cuda -t mealie-onnx-cuda .
+#
+# Run (requires nvidia-container-toolkit):
+#   docker run --gpus all -e BYPASS_INFERENCE_GATE=1 -p 8003:8000 mealie-onnx-cuda
+
+FROM python:3.10-slim AS converter
+
+WORKDIR /build
+
+RUN pip install --no-cache-dir \
+    torch==2.3.1 \
+    torchvision==0.18.1 \
+    --index-url https://download.pytorch.org/whl/cpu
+
+RUN pip install --no-cache-dir \
+    onnx==1.16.0 \
+    onnxruntime==1.18.0 \
+    numpy==1.26.4
+
+COPY serving-rahil/convert_model.py convert_model.py
+
+# Export FP32 ONNX only — GPU runtime uses FP32 with CUDA kernels
+RUN python convert_model.py --output-dir /models --skip-quantization
+
+
+# Runtime stage — CUDA base 
+FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04 AS runtime
+
+WORKDIR /app
+
+# Install Python 3.10 — use python3-distutils not python3.10-distutils
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 python3-pip python3-distutils \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN ln -sf /usr/bin/python3.10 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3 /usr/bin/python
+
+# onnxruntime-gpu includes CUDAExecutionProvider
+RUN pip install --no-cache-dir \
+    onnxruntime-gpu==1.18.0 \
+    fastapi==0.111.0 \
+    "uvicorn[standard]==0.30.0" \
+    Pillow==10.3.0 \
+    pydantic==2.7.1 \
+    numpy==1.26.4
+
+# Copy FP32 ONNX model
+COPY --from=converter /models/efficientnet_b0.onnx /models/efficientnet_b0.onnx
+
+COPY serving-rahil/app_onnx_cuda.py app.py
+COPY serving-rahil/recipe_assembler.py recipe_assembler.py
+
+ENV MODEL_PATH=/models/efficientnet_b0.onnx
+ENV MODEL_VERSION=efficientnet-b0-onnx-cuda-v1
+ENV SERVING_OPTION_ID=onnx_cuda
+ENV BYPASS_INFERENCE_GATE=0
+ENV CONFIDENCE_THRESHOLD=0.6
+
+EXPOSE 8000
+
+# Run with: docker run --gpus all ...
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

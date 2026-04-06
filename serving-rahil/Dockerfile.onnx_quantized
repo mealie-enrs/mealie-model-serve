@@ -1,0 +1,62 @@
+# serving-rahil/Dockerfile.onnx_quantized
+#
+# Serving config: onnx_quantized
+# Hardware: CPU
+# Optimization: Model-level — ONNX + INT8 dynamic quantization
+#
+# Two-stage: convert → serve (no PyTorch in runtime image)
+#
+# Build:
+#   docker build -f serving-rahil/Dockerfile.onnx_quantized -t mealie-onnx-quantized .
+#
+# Run:
+#   docker run -e BYPASS_INFERENCE_GATE=1 -p 8002:8000 mealie-onnx-quantized
+
+FROM python:3.10-slim AS converter
+
+WORKDIR /build
+
+RUN pip install --no-cache-dir \
+    torch==2.3.1 \
+    torchvision==0.18.1 \
+    --index-url https://download.pytorch.org/whl/cpu
+
+RUN pip install --no-cache-dir \
+    onnx==1.16.0 \
+    onnxruntime==1.18.0 \
+    numpy==1.26.4
+
+COPY serving-rahil/convert_model.py convert_model.py
+
+# Produces both FP32 and INT8 ONNX models
+RUN python convert_model.py --output-dir /models
+
+
+# Runtime stage 
+FROM python:3.10-slim AS runtime
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir \
+    onnxruntime==1.18.0 \
+    fastapi==0.111.0 \
+    "uvicorn[standard]==0.30.0" \
+    Pillow==10.3.0 \
+    pydantic==2.7.1 \
+    numpy==1.26.4
+
+# Copy INT8 quantized model only (FP32 not needed at runtime)
+COPY --from=converter /models/efficientnet_b0_int8.onnx /models/efficientnet_b0_int8.onnx
+
+COPY serving-rahil/app_onnx_quantized.py app.py
+COPY serving-rahil/recipe_assembler.py recipe_assembler.py
+
+ENV MODEL_PATH=/models/efficientnet_b0_int8.onnx
+ENV MODEL_VERSION=efficientnet-b0-onnx-int8-v1
+ENV SERVING_OPTION_ID=onnx_quantized
+ENV BYPASS_INFERENCE_GATE=0
+ENV CONFIDENCE_THRESHOLD=0.6
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

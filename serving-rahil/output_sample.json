@@ -1,0 +1,62 @@
+{
+  "request_id": "req_a1b2c3d4",
+  "status": "success",
+  "confidence": 0.87,
+  "confidence_flag": false,
+  "model_version": "efficientnet-b0-imagenet-v1",
+  "serving_option": "baseline_pytorch",
+  "draft_recipe": {
+    "name": "Chicken Tikka Masala",
+    "description": "A rich and creamy Indian curry with tender grilled chicken in a spiced tomato sauce.",
+    "recipeCategory": "Indian",
+    "tags": ["curry", "chicken", "indian"],
+    "recipeIngredient": [
+      "2 lbs boneless skinless chicken breasts",
+      "1 cup plain yogurt",
+      "2 tbsp lemon juice",
+      "2 tsp cumin",
+      "1 tsp turmeric",
+      "1 tsp garam masala",
+      "2 tbsp butter",
+      "1 large onion, diced",
+      "3 cloves garlic, minced",
+      "1 tbsp fresh ginger, grated",
+      "1 can crushed tomatoes",
+      "1 cup heavy cream",
+      "Salt and pepper to taste"
+    ],
+    "recipeInstructions": [
+      {"id": "step_1", "text": "Mix yogurt, lemon juice, and spices in a bowl."},
+      {"id": "step_2", "text": "Add chicken and marinate for at least 1 hour."},
+      {"id": "step_3", "text": "Grill or broil chicken until cooked through."},
+      {"id": "step_4", "text": "Saute onion in butter until golden."},
+      {"id": "step_5", "text": "Add garlic and ginger, cook 2 minutes."},
+      {"id": "step_6", "text": "Add tomatoes and simmer 15 minutes."},
+      {"id": "step_7", "text": "Stir in cream and add grilled chicken."},
+      {"id": "step_8", "text": "Simmer 10 minutes and serve over rice."}
+    ],
+    "nutrition": {
+      "disclaimer": "AI-generated nutritional information is approximate. Please verify all allergens independently before serving.",
+      "allergens": ["dairy"]
+    },
+    "retrieval_metadata": {
+      "source_dataset": "Recipe1M",
+      "retrieval_method": "mock_ann (production: FAISS index)",
+      "top_k_candidates": 5,
+      "selected_rank": 1,
+      "similarity_score": 0.87,
+      "food_category": "curry",
+      "imagenet_class_idx": 963,
+      "model": "efficientnet-b0-imagenet-v1"
+    }
+  },
+  "safeguarding": {
+    "is_food": true,
+    "is_nsfw": false,
+    "confidence_flag": false,
+    "confidence_threshold": 0.6,
+    "requires_user_confirmation": true,
+    "disclaimer": "This is an AI-generated draft recipe. Review all ingredients and steps carefully before saving. Allergen information may be incomplete — verify independently."
+  },
+  "latency_ms": 45.2
+}
