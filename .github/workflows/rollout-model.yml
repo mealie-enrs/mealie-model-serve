@@ -82,9 +82,6 @@ jobs:
           script: |
             set -euo pipefail
             cd ~/mealie-model-serve
-            git fetch origin main
-            git checkout main
-            git pull --ff-only origin main
             export MLFLOW_TRACKING_URI=http://127.0.0.1:30601
             TRAIN_IMAGE="mealie-model-serve-train:rollout"
 
@@ -102,10 +99,7 @@ jobs:
               -v "$PWD:/app" \
               --entrypoint python \
               "${TRAIN_IMAGE}" \
-              /app/ops/promote_alias.py \
-              --model "${MODEL_NAME}" \
-              --alias "${ROLLOUT_TARGET}" \
-              --version "${VERSION}"
+              -c 'from mlflow.tracking import MlflowClient; import os; MlflowClient(tracking_uri=os.environ["MLFLOW_TRACKING_URI"]).set_registered_model_alias("'"${MODEL_NAME}"'", "'"${ROLLOUT_TARGET}"'", "'"${VERSION}"'"); print("'"${MODEL_NAME}"'@'"${ROLLOUT_TARGET}"' -> version '"${VERSION}"'")'
 
             if [ "${RELOAD_SERVICE}" = "true" ]; then
               curl -fsS -X POST "${SERVICE_URL}/reload" \
