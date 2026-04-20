@@ -15,3 +15,4 @@ data:
   MLFLOW_TRACKING_URI: "http://mlflow:5000"
   MLFLOW_REGISTRY_URI: "http://mlflow:5000"
   MODEL_URI: "models:/food-classifier@staging"
+  MODEL_PROVIDER: "cpu"

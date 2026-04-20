@@ -8,14 +8,14 @@ resources:
   - minio.yaml
   - mlflow.yaml
   - model-serve.yaml
-# Default names work with `docker build -t mealie-model-serve-mlflow:latest` + `k3s ctr images import`.
-# Override via `images:` in an overlay or CI when using a real registry (and set imagePullPolicy back to Always).
+# Default to GHCR so a fresh cluster can boot without a local image import step.
+# CI can still override tags during rollout.
 images:
-  - name: ghcr.io/your-org/mealie-model-serve-mlflow
-    newName: mealie-model-serve-mlflow
+  - name: mealie-model-serve-mlflow
+    newName: ghcr.io/mealie-enrs/mealie-model-serve-mlflow
     newTag: latest
-  - name: ghcr.io/your-org/mealie-model-serve-api
-    newName: mealie-model-serve-api
+  - name: mealie-model-serve-api
+    newName: ghcr.io/mealie-enrs/mealie-model-serve-api
     newTag: latest
 # Optional (private GHCR): add after creating Secret ghcr-pull in mms:
 #   - path: patches/ghcr-imagepull.yaml

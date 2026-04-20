@@ -1,0 +1,90 @@
+name: Terraform GPU Infra
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Terraform action to run
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - apply
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    env:
+      TF_VAR_os_auth_url: ${{ secrets.OS_AUTH_URL }}
+      TF_VAR_os_region_name: ${{ secrets.OS_REGION_NAME }}
+      TF_VAR_os_project_name: ${{ secrets.OS_PROJECT_NAME }}
+      TF_VAR_os_application_credential_id: ${{ secrets.OS_APPLICATION_CREDENTIAL_ID }}
+      TF_VAR_os_application_credential_secret: ${{ secrets.OS_APPLICATION_CREDENTIAL_SECRET }}
+      TF_VAR_image_name: ${{ secrets.TF_IMAGE_NAME }}
+      TF_VAR_flavor_name: ${{ secrets.TF_FLAVOR_NAME }}
+      TF_VAR_network_name: ${{ secrets.TF_NETWORK_NAME }}
+      TF_VAR_external_network_name: ${{ secrets.TF_EXTERNAL_NETWORK_NAME }}
+      TF_VAR_ssh_key_name: ${{ secrets.TF_SSH_KEY_NAME }}
+      TF_VAR_reservation_id: ${{ secrets.TF_RESERVATION_ID }}
+      TF_VAR_allowed_ssh_cidr: ${{ secrets.TF_ALLOWED_SSH_CIDR }}
+      TF_VAR_allowed_mms_cidr: ${{ secrets.TF_ALLOWED_MMS_CIDR }}
+      TF_VAR_allowed_k8s_cidr: ${{ secrets.TF_ALLOWED_K8S_CIDR }}
+      TF_VAR_instance_name: ${{ vars.TF_INSTANCE_NAME || 'proj26-mealie-node-gpu' }}
+      TF_VAR_ssh_user: ${{ vars.TF_SSH_USER || 'cc' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate required Terraform secrets
+        run: |
+          missing=""
+          for name in \
+            TF_VAR_os_auth_url \
+            TF_VAR_os_region_name \
+            TF_VAR_os_project_name \
+            TF_VAR_os_application_credential_id \
+            TF_VAR_os_application_credential_secret \
+            TF_VAR_image_name \
+            TF_VAR_flavor_name \
+            TF_VAR_network_name \
+            TF_VAR_external_network_name \
+            TF_VAR_ssh_key_name \
+            TF_VAR_reservation_id \
+            TF_VAR_allowed_ssh_cidr \
+            TF_VAR_allowed_mms_cidr \
+            TF_VAR_allowed_k8s_cidr
+          do
+            eval "value=\${$name:-}"
+            if [ -z "$value" ]; then
+              missing="$missing $name"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing GitHub Actions secrets:$missing"
+            exit 1
+          fi
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Upload plan artifact
+        if: ${{ github.event.inputs.action == 'plan' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: mealie-model-serve-tfplan
+          path: infra/terraform/tfplan
+
+      - name: Terraform apply
+        if: ${{ github.event.inputs.action == 'apply' }}
+        run: terraform apply -input=false -auto-approve tfplan

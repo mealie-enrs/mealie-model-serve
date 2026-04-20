@@ -1,4 +1,4 @@
-# Deploy mealie-model-serve on your Chameleon k3s VM (e.g. 192.5.86.170)
+# Deploy mealie-model-serve on your Chameleon GPU VM (e.g. 192.5.87.188)
 
 ## Can we deploy there?
 
@@ -10,11 +10,22 @@
 
 This repo’s **Docker Compose** stack is the same components; **Kubernetes** just schedules them as Pods + Services + PVCs.
 
-**Terraform note:** Use **`mealie-model-serve/infra/terraform`** for a dedicated MMS VM (security group opens **22**, **30601**, **30608**; cloud-init installs Docker + k3s). Alternatively, reuse **`mealie/infra/terraform`** for the VM and open those NodePorts in Horizon or a separate rule set. Either way, **apply k8s manifests** (below) with kubectl; this Terraform stack does not install workloads.
+**Terraform note:** Use **`mealie-model-serve/infra/terraform`** for a dedicated MMS VM. It now opens **22**, **6443**, **30601**, and **30608**, installs Docker + k3s, and configures NVIDIA runtime support in cloud-init. Terraform provisions the VM; workload rollout still happens via **kustomize/kubectl**.
 
 We **cannot** verify `192.5.86.170` from the assistant’s environment; after SSH, run `kubectl get nodes` to confirm.
 
 ---
+
+## 0) If you are reusing an existing GPU node
+
+The current GPU node at `192.5.87.188` has NVIDIA drivers but may not yet have Docker, k3s, or the NVIDIA container runtime installed. In that case:
+
+```bash
+scp -i ~/.ssh/id_rsa_chameleon scripts/bootstrap-gpu-node.sh cc@192.5.87.188:~/bootstrap-gpu-node.sh
+ssh -i ~/.ssh/id_rsa_chameleon cc@192.5.87.188 'sudo bash ~/bootstrap-gpu-node.sh'
+```
+
+That gives you the same shape as the Terraform cloud-init path, including the NVIDIA device plugin patch that makes GPUs schedulable under k3s.
 
 ## 1) Build and push images
 
@@ -51,7 +62,8 @@ kubectl apply -f /tmp/mms-secrets.yaml
 
 ```bash
 export KUBECONFIG=~/.kube/config   # or scp from VM: /etc/rancher/k3s/k3s.yaml
-kubectl apply -k infra/k8s/
+kubectl kustomize infra/k8s/overlays/chameleon-s3-gpu \
+  --load-restrictor LoadRestrictionsNone | kubectl apply -f -
 kubectl -n mms rollout status deployment/mms-mlflow --timeout=300s
 kubectl -n mms rollout status deployment/mms-model-serve --timeout=300s
 ```
@@ -72,7 +84,7 @@ and MinIO/S3 env pointing at **`http://<FLOATING_IP>:<minio-nodeport>`** — Min
 
 ---
 
-## 5) URLs (replace `<IP>` with 192.5.86.170 if that is the node with NodePort routing)
+## 5) URLs (replace `<IP>` with your GPU node floating IP, e.g. `192.5.87.188`)
 
 | Service | URL |
 |---------|-----|
@@ -193,7 +205,9 @@ Point **`MLFLOW_S3_ENDPOINT_URL`** at the **7480** URL, set **`MLFLOW_ARTIFACTS_
 
 ## GitHub Actions (build → GHCR → k3s)
 
-Workflow: **`.github/workflows/deploy.yml`**. On every push to **`main`**, it builds **`linux/amd64`** images, pushes to **`ghcr.io/<lowercase-github-owner>/mealie-model-serve-{mlflow,api}`** (tags **`:<12-char-sha>`** and **`:latest`**), then SSHes to your VM and runs **`kubectl set image`** for `mms-mlflow` and `mms-model-serve` in namespace **`mms`**.
+Workflow: **`.github/workflows/deploy.yml`**. On every push to **`main`**, it builds **`linux/amd64`** images, pushes to **`ghcr.io/<lowercase-github-owner>/mealie-model-serve-{mlflow,api}`** (tags **`:<12-char-sha>`** and **`:latest`**), then SSHes to your VM, reapplies the **`chameleon-s3-gpu`** overlay, and rolls **`mms-mlflow`** and **`mms-model-serve`** forward in namespace **`mms`**.
+
+There is also a manual infrastructure workflow: **`.github/workflows/terraform-apply.yml`**, which can run Terraform plan/apply for the GPU VM itself if you load the required OpenStack secrets into GitHub Actions.
 
 ### One-time: GitHub repo settings
 

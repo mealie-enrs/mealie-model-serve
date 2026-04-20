@@ -23,6 +23,7 @@ external_network_name = "public"
 # Security scope (restrict to your IP/CIDR)
 allowed_ssh_cidr = "YOUR.PUBLIC.IP.ADDR/32"
 allowed_mms_cidr = "YOUR.PUBLIC.IP.ADDR/32"
+allowed_k8s_cidr = "YOUR.PUBLIC.IP.ADDR/32"
 
 volume_size_gb = 100
 ssh_user       = "cc"

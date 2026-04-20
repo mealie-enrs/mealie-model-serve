@@ -15,7 +15,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: seed
-          image: mealie-model-serve-api:latest
+          image: ghcr.io/mealie-enrs/mealie-model-serve-api:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: MLFLOW_TRACKING_URI

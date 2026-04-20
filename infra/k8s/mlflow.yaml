@@ -45,7 +45,7 @@ spec:
               until nc -z minio 9000; do sleep 2; done
       containers:
         - name: mlflow
-          image: ghcr.io/your-org/mealie-model-serve-mlflow:latest
+          image: ghcr.io/mealie-enrs/mealie-model-serve-mlflow:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 5000

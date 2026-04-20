@@ -33,6 +33,16 @@ resource "openstack_networking_secgroup_rule_v2" "model_serve_nodeport" {
   security_group_id = openstack_networking_secgroup_v2.mms.id
 }
 
+resource "openstack_networking_secgroup_rule_v2" "k8s_api" {
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 6443
+  port_range_max    = 6443
+  remote_ip_prefix  = var.allowed_k8s_cidr
+  security_group_id = openstack_networking_secgroup_v2.mms.id
+}
+
 resource "openstack_networking_floatingip_v2" "mms_fip" {
   pool = var.external_network_name
 }
@@ -43,6 +53,7 @@ resource "null_resource" "create_reserved_server" {
     openstack_networking_secgroup_rule_v2.ssh,
     openstack_networking_secgroup_rule_v2.mlflow_nodeport,
     openstack_networking_secgroup_rule_v2.model_serve_nodeport,
+    openstack_networking_secgroup_rule_v2.k8s_api,
   ]
 
   triggers = {

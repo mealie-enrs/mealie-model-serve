@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mms-config
+  namespace: mms
+data:
+  MODEL_PROVIDER: "cuda"

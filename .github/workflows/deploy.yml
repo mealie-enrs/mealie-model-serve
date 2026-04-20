@@ -32,7 +32,7 @@ env:
   IMAGE_MLFLOW: mealie-model-serve-mlflow
   IMAGE_API: mealie-model-serve-api
   # Kustomize overlay under infra/k8s/overlays/ (no MinIO → Chameleon S3).
-  MMS_KUSTOMIZE_OVERLAY: chameleon-s3
+  MMS_KUSTOMIZE_OVERLAY: chameleon-s3-gpu
 
 jobs:
   build-and-push:
@@ -147,11 +147,23 @@ jobs:
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
+          OWNER_LC: ${{ needs.build-and-push.outputs.owner_lc }}
         run: |
           set -euo pipefail
           KEY="${{ steps.sshkey.outputs.keyfile }}"
           OVERLAY="infra/k8s/overlays/${{ env.MMS_KUSTOMIZE_OVERLAY }}"
           test -d "$OVERLAY"
+          if [ -n "${GHCR_PULL_TOKEN:-}" ]; then
+            DOCKER_USER="${GHCR_PULL_USERNAME:-$OWNER_LC}"
+            ssh -i "$KEY" -o StrictHostKeyChecking=accept-new "${SSH_USER}@${SSH_HOST}" \
+              "sudo k3s kubectl create secret docker-registry ghcr-pull \
+                --docker-server=ghcr.io \
+                --docker-username='${DOCKER_USER}' \
+                --docker-password='${GHCR_PULL_TOKEN}' \
+                -n mms --dry-run=client -o yaml | sudo k3s kubectl apply -f -"
+          fi
           kubectl kustomize "$OVERLAY" --load-restrictor LoadRestrictionsNone | \
             ssh -i "$KEY" -o StrictHostKeyChecking=accept-new "${SSH_USER}@${SSH_HOST}" \
               'sudo k3s kubectl delete job mms-seed-toy-model -n mms --ignore-not-found; sudo k3s kubectl apply -f -'

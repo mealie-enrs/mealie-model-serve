@@ -30,7 +30,7 @@ spec:
     spec:
       containers:
         - name: model-serve
-          image: ghcr.io/your-org/mealie-model-serve-api:latest
+          image: ghcr.io/mealie-enrs/mealie-model-serve-api:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
@@ -75,10 +75,13 @@ spec:
                 configMapKeyRef:
                   name: mms-config
                   key: MODEL_URI
+            - name: MODEL_PROVIDER
+              valueFrom:
+                configMapKeyRef:
+                  name: mms-config
+                  key: MODEL_PROVIDER
             - name: MODEL_CACHE_DIR
               value: "/var/lib/model-cache"
-            - name: MODEL_PROVIDER
-              value: "cpu"
             - name: SERVING_OPTION_ID
               value: "k8s_nodeport"
           volumeMounts:

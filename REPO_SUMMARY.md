@@ -12,6 +12,7 @@ A **v1 model platform** for research / Chameleon-style deployments:
 - **Training:** Python scripts that train (Iris MVP), export **ONNX**, register models, set aliases (`staging`, `canary`, `champion`).
 - **Serving:** **FastAPI** + **ONNX Runtime**, resolves `models:/name@alias` from MLflow, local disk cache, **`/reload`**, Prometheus **`/metrics`**.
 - **Ops:** promote / rollback aliases, benchmark helper (stub), evaluation script.
+- **GPU deployment path:** Terraform-provisioned k3s VM, NVIDIA runtime bootstrap, GPU overlay, GitHub Actions rollout.
 
 ---
 
@@ -24,7 +25,7 @@ A **v1 model platform** for research / Chameleon-style deployments:
 | **`ops/`** | `promote_alias.py`, `rollback_alias.py`, `benchmark_candidate.py` |
 | **`scripts/`** | `docker-entrypoint-serving.sh`, `mlflow-entrypoint.sh`, `ensure_minio_bucket.py`, `evaluate_serving.py` |
 | **`infra/docker-compose.*.yml`** | Control plane + serving stacks; shared Docker network `mealie-model-serve-net` |
-| **`infra/k8s/`** | Kustomize: namespace **`mms`**, ConfigMap, Postgres/MinIO/MLflow/model-serve manifests, `secrets.example.yaml`, **`DEPLOY.md`** |
+| **`infra/k8s/`** | Kustomize: namespace **`mms`**, ConfigMap, Postgres/MinIO/MLflow/model-serve manifests, GPU overlay, `secrets.example.yaml`, **`DEPLOY.md`** |
 | **`infra/terraform/`** | OpenStack + `local-exec` VM create, cloud-init (**Docker + k3s**), SG rules **22 / 30601 / 30608**, FIP |
 | **`infra/triton/`** | Optional Triton `model_repository` sample (`config.pbtxt` + README) |
 | **`docs/`** | `CHAMELEON_BENCHMARK.md`, `DEMO_VIDEO.md`, `RAY_SERVE_ALTERNATIVE.md` |
@@ -78,7 +79,7 @@ See **`requirements.txt`**: MLflow, Postgres driver, boto3, sklearn, skl2onnx/on
 
 ## Current operational status (context)
 
-- **k3s** has been installed manually on **`serving-proj26`**; cluster shows CoreDNS, **local-path-provisioner**, Traefik, etc. Next step for “full stack on k8s” is build/push or import images, apply secrets, then **`kubectl apply -k infra/k8s/`** per **`DEPLOY.md`**.
+- The repo now includes a dedicated **GPU-serving overlay** and a bootstrap script for reusing an existing Chameleon GPU VM, in addition to the Terraform path for provisioning a fresh one.
 
 ---
 

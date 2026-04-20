@@ -1,15 +1,26 @@
 #cloud-config
 # First-boot: extra disk for k3s local-path PVs, k3s (Kubernetes + containerd), Docker CLI/engine
-# for compose/build/import — k3s does not use the Docker daemon for pods.
+# for compose/build/import, plus NVIDIA container runtime and device plugin for GPU scheduling.
 package_update: true
 packages:
   - curl
   - jq
+  - gnupg
   - docker.io
 
 runcmd:
   - [ sh, -c, "DEVICE=$(lsblk -ndo NAME,TYPE | awk '$2==\"disk\"{print $1}' | grep -E '^vd[b-z]|sd[b-z]|nvme1n1' | head -n1); if [ -n \"$DEVICE\" ]; then DEV=/dev/$DEVICE; blkid $DEV || mkfs.ext4 -F $DEV; mkdir -p /var/lib/rancher/k3s/storage; grep -q \"$DEV\" /etc/fstab || echo \"$DEV /var/lib/rancher/k3s/storage ext4 defaults,nofail 0 2\" >> /etc/fstab; mount -a; fi" ]
   - [ sh, -c, "systemctl enable --now docker" ]
   - [ sh, -c, "usermod -aG docker ${ssh_user}" ]
+  - [ sh, -c, "curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg" ]
+  - [ sh, -c, "curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#' > /etc/apt/sources.list.d/nvidia-container-toolkit.list" ]
+  - [ sh, -c, "apt-get update && apt-get install -y --no-install-recommends nvidia-container-toolkit nvidia-container-runtime" ]
   - [ sh, -c, "curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC='server --write-kubeconfig-mode 644' sh -" ]
+  - [ sh, -c, "mkdir -p /var/lib/rancher/k3s/agent/etc/containerd" ]
+  - [ sh, -c, "cat > /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl <<'EOF'\n{{ template \"base\" . }}\n\n[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.'nvidia']\n  runtime_type = \"io.containerd.runc.v2\"\n\n[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.'nvidia'.options]\n  BinaryName = \"/usr/bin/nvidia-container-runtime\"\n  SystemdCgroup = false\nEOF" ]
+  - [ sh, -c, "systemctl restart k3s" ]
   - [ sh, -c, "mkdir -p /home/${ssh_user}/.kube && cp /etc/rancher/k3s/k3s.yaml /home/${ssh_user}/.kube/config && chown -R ${ssh_user}:${ssh_user} /home/${ssh_user}/.kube" ]
+  - [ sh, -c, "for i in $(seq 1 60); do /usr/local/bin/k3s kubectl get nodes >/dev/null 2>&1 && break; sleep 5; done" ]
+  - [ sh, -c, "/usr/local/bin/k3s kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.17.0/deployments/static/nvidia-device-plugin.yml" ]
+  - [ sh, -c, "/usr/local/bin/k3s kubectl patch daemonset nvidia-device-plugin-daemonset -n kube-system --type merge -p '{\"spec\":{\"template\":{\"spec\":{\"runtimeClassName\":\"nvidia\"}}}}'" ]
+  - [ sh, -c, "/usr/local/bin/k3s kubectl rollout status daemonset/nvidia-device-plugin-daemonset -n kube-system --timeout=180s" ]

@@ -19,11 +19,16 @@ ops/
 infra/k8s/          # k3s / Kubernetes (same stack as Docker Compose)
 ```
 
-## Kubernetes on Chameleon (k3s VM, e.g. after SSH to your server)
+## Kubernetes on Chameleon (GPU node)
 
-See **`infra/k8s/DEPLOY.md`**: build/push images, apply secrets, then `kubectl apply -k infra/k8s/` (in-cluster MinIO) or **`infra/k8s/overlays/chameleon-s3`** for Swift / S3 artifacts (`serve/` prefix in your container). Pushes to **`main`** / **`master`** run **`.github/workflows/deploy.yml`**: build → GHCR → SSH apply kustomize → roll out images on the VM.
+See **`infra/k8s/DEPLOY.md`** for the full path. The intended production flow is:
 
-Provisioning a **dedicated MMS VM** (FIP + SG + k3s cloud-init): **`infra/terraform/`** in this package (`terraform init` / `apply` there). The root **`mealie/infra/terraform`** stack is the DMS-oriented variant. Workloads are still **kubectl/kustomize**, not Terraform, unless you add a Kubernetes provider.
+1. Provision or refresh the dedicated GPU VM with **`infra/terraform/`**
+2. Bootstrap k3s + NVIDIA runtime on an existing GPU node with **`scripts/bootstrap-gpu-node.sh`** if you are reusing a box
+3. Apply the **`infra/k8s/overlays/chameleon-s3-gpu`** overlay
+4. Push to **`main`** so **`.github/workflows/deploy.yml`** builds images, pushes GHCR images, and rolls the cluster forward over SSH
+
+The default deploy workflow now targets the **GPU Chameleon overlay**, not the CPU/default one.
 
 ## Phase 1 — control plane
 
@@ -142,3 +147,15 @@ Default MinIO credentials and ports are for **local dev only**. For Chameleon: p
 In repo now: control plane, trainer MVP, registry + aliases, serving + reload + Prometheus metrics, ops scripts (+ benchmark stub).
 
 Later: canary traffic split, Triton/TensorRT, Octavia LB, automated promotion gates.
+
+## GitHub Actions + Terraform
+
+There are now two separate automation paths:
+
+- **`.github/workflows/deploy.yml`**  
+  Builds `mealie-model-serve-{mlflow,api}` images, pushes them to GHCR, applies the kustomize overlay on the VM, and updates the running Kubernetes deployments.
+
+- **`.github/workflows/terraform-apply.yml`**  
+  Manual workflow-dispatch entrypoint for provisioning or updating the GPU VM itself from `infra/terraform/`.
+
+That split mirrors the DMS setup: infrastructure is provisioned separately from application rollout.

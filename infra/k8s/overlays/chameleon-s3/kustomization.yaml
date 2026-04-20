@@ -20,13 +20,15 @@ resources:
   - ../../model-serve.yaml
   - ../../job-seed-toy-model.yaml
 images:
-  - name: ghcr.io/your-org/mealie-model-serve-mlflow
-    newName: mealie-model-serve-mlflow
+  - name: mealie-model-serve-mlflow
+    newName: ghcr.io/mealie-enrs/mealie-model-serve-mlflow
     newTag: latest
-  - name: ghcr.io/your-org/mealie-model-serve-api
-    newName: mealie-model-serve-api
+  - name: mealie-model-serve-api
+    newName: ghcr.io/mealie-enrs/mealie-model-serve-api
     newTag: latest
 patches:
+  - path: ../../patches/ghcr-imagepull.yaml
+  - path: ../../patches/ghcr-imagepull-job.yaml
   - path: patch-hostnetwork-egress.yaml
   - path: patch-deployment-recreate.yaml
   - path: patch-hostaliases-chi-uc.yaml

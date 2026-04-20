@@ -88,6 +88,12 @@ variable "allowed_mms_cidr" {
   default     = "0.0.0.0/0"
 }
 
+variable "allowed_k8s_cidr" {
+  type        = string
+  description = "CIDR allowed to reach the k3s API server on 6443"
+  default     = "0.0.0.0/0"
+}
+
 variable "volume_size_gb" {
   type        = number
   description = "Reserved for future volume attachment; not used by this stack yet"
