@@ -1,0 +1,23 @@
+{
+  "dataset": {
+    "source": "sklearn_builtin",
+    "name": "iris",
+    "test_size": 0.2,
+    "random_state": 42
+  },
+  "mlflow": {
+    "tracking_uri": "http://127.0.0.1:30601",
+    "experiment_name": "mealie-model-serve-training",
+    "run_name": "iris-optuna-search"
+  },
+  "search": {
+    "metric_name": "val_macro_f1",
+    "direction": "maximize",
+    "n_trials": 8,
+    "candidates": [
+      "logistic_regression",
+      "random_forest",
+      "extra_trees"
+    ]
+  }
+}

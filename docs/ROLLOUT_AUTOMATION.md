@@ -57,3 +57,41 @@ That gives you a demo loop:
 3. feedback saved for retraining
 4. retrain to canary
 5. controller promotes or rolls back automatically
+
+## Packaged operator flow
+
+Use `scripts/run_operator_flow_chameleon.sh` when you want one reproducible operator command that:
+
+1. generates live feedback against the rollout router
+2. copies the raw JSONL feedback log from the running cluster
+3. builds a curated `npz_classification` dataset
+4. retrains inside the training container on Chameleon
+5. registers the new model in MLflow with a chosen alias
+6. optionally runs a manual rollout-controller check when targeting `@canary`
+
+Safe demo command:
+
+```bash
+bash scripts/run_operator_flow_chameleon.sh \
+  --host 192.5.87.188 \
+  --alias retrain-demo \
+  --requests 12
+```
+
+Canary-refresh demo command:
+
+```bash
+bash scripts/run_operator_flow_chameleon.sh \
+  --host 192.5.87.188 \
+  --alias canary \
+  --requests 12 \
+  --controller-check
+```
+
+The script prints a JSON summary with:
+
+- raw feedback path and row count
+- curated dataset path and size
+- MLflow run id and public run URL
+- registered alias version
+- rollout-controller logs when `--controller-check` is used

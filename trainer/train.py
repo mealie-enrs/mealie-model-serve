@@ -1,103 +1,169 @@
 #!/usr/bin/env python3
-"""Phase 2 MVP: train Iris sklearn → ONNX, log to MLflow, register model + required tags + @staging alias."""
+"""Config-driven sklearn training entrypoint with MLflow tracking."""
 
 from __future__ import annotations
 
+import argparse
+import json
 import os
-import subprocess
-import sys
+import tempfile
+import time
+from pathlib import Path
+from typing import Any
 
 import mlflow
 import mlflow.onnx
 from mlflow.tracking import MlflowClient
-from sklearn.datasets import load_iris
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, f1_score, log_loss
 from skl2onnx import convert_sklearn
 from skl2onnx.common.data_types import FloatTensorType
 
-
-def _git_sha() -> str:
-    try:
-        out = subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"],
-            stderr=subprocess.DEVNULL,
-            cwd=os.path.dirname(__file__),
-        )
-        return out.decode().strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return os.environ.get("GIT_SHA", "unknown")
+from trainer.utils.config import load_json_config
+from trainer.utils.data import load_dataset
+from trainer.utils.env import collect_environment_info, flatten_dict
+from trainer.utils.modeling import build_estimator
 
 
-def _apply_s3_env() -> None:
-    os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--config",
+        required=True,
+        help="Path to a JSON configuration file under trainer/configs/ or elsewhere.",
+    )
+    parser.add_argument(
+        "--register-model",
+        action="store_true",
+        help="Register the resulting ONNX model in MLflow Model Registry.",
+    )
+    parser.add_argument(
+        "--alias",
+        default=None,
+        help="Optional MLflow alias to assign when registering a model.",
+    )
+    return parser.parse_args()
+
+
+def _log_environment_info(env_info: dict[str, Any]) -> None:
+    for key, value in flatten_dict(env_info, prefix="env").items():
+        mlflow.log_param(key, value)
+
+
+def _export_and_log_model(estimator: Any, input_dim: int) -> None:
+    onnx_model = convert_sklearn(
+        estimator,
+        initial_types=[("float_input", FloatTensorType([None, input_dim]))],
+        options={id(estimator): {"zipmap": False}},
+    )
+    mlflow.onnx.log_model(onnx_model, "model")
+
+
+def _register_model(
+    *,
+    tracking_uri: str,
+    run_id: str,
+    model_name: str,
+    alias: str | None,
+    metadata: dict[str, Any],
+) -> tuple[str, str]:
+    model_uri = f"runs:/{run_id}/model"
+    mv = mlflow.register_model(model_uri=model_uri, name=model_name)
+    version = str(mv.version)
+    client = MlflowClient(tracking_uri=tracking_uri)
+    for key, value in metadata.items():
+        client.set_model_version_tag(model_name, version, key, str(value))
+    if alias:
+        client.set_registered_model_alias(model_name, alias, version)
+    return model_name, version
 
 
 def main() -> None:
-    _apply_s3_env()
-    tracking = os.environ["MLFLOW_TRACKING_URI"]
-    model_name = os.environ.get("MODEL_NAME", "food-classifier")
-    dataset_version = os.environ.get("DATASET_VERSION", "v1")
-    experiment = os.environ.get("MLFLOW_EXPERIMENT", "mealie-model-serve")
-    register = os.environ.get("REGISTER_MODEL", "true").lower() in ("1", "true", "yes")
+    args = _parse_args()
+    config = load_json_config(Path(args.config))
 
-    mlflow.set_tracking_uri(tracking)
-    mlflow.set_experiment(experiment)
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", config["mlflow"]["tracking_uri"])
+    experiment_name = config["mlflow"]["experiment_name"]
+    run_name = config["mlflow"].get("run_name", config["candidate"]["name"])
+    alias = args.alias if args.alias is not None else config["mlflow"].get("register_alias")
 
-    X, y = load_iris(return_X_y=True)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
+    mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_experiment(experiment_name)
+
+    dataset = load_dataset(config["dataset"])
+    estimator = build_estimator(
+        candidate_name=config["candidate"]["name"],
+        params=config["candidate"].get("params", {}),
     )
-    clf = RandomForestClassifier(n_estimators=20, random_state=42)
-    clf.fit(X_train, y_train)
-    acc = float(clf.score(X_test, y_test))
-    git_sha = _git_sha()
+    env_info = collect_environment_info()
 
-    onnx_model = convert_sklearn(
-        clf,
-        initial_types=[("float_input", FloatTensorType([None, X.shape[1]]))],
-        options={id(clf): {"zipmap": False}},
-    )
+    with mlflow.start_run(run_name=run_name) as run:
+        flattened = flatten_dict(config)
+        for key, value in flattened.items():
+            mlflow.log_param(key, value)
+        _log_environment_info(env_info)
 
-    with mlflow.start_run() as run:
-        mlflow.log_param("framework", "sklearn")
-        mlflow.log_param("export_format", "onnx")
-        mlflow.log_metric("accuracy", acc)
-        mlflow.log_metric("n_features", X.shape[1])
-        mlflow.onnx.log_model(onnx_model, "model")
+        start_time = time.perf_counter()
+        estimator.fit(dataset.X_train, dataset.y_train)
+        fit_time_sec = time.perf_counter() - start_time
 
+        infer_start = time.perf_counter()
+        y_pred = estimator.predict(dataset.X_val)
+        infer_time_sec = time.perf_counter() - infer_start
+
+        metrics = {
+            "val_accuracy": float(accuracy_score(dataset.y_val, y_pred)),
+            "val_macro_f1": float(f1_score(dataset.y_val, y_pred, average="macro")),
+            "fit_time_sec": fit_time_sec,
+            "inference_time_sec": infer_time_sec,
+            "train_rows": float(dataset.X_train.shape[0]),
+            "val_rows": float(dataset.X_val.shape[0]),
+            "feature_dim": float(dataset.X_train.shape[1]),
+        }
+        if hasattr(estimator, "predict_proba"):
+            metrics["val_log_loss"] = float(
+                log_loss(dataset.y_val, estimator.predict_proba(dataset.X_val))
+            )
+        mlflow.log_metrics(metrics)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            resolved_path = Path(tmp_dir) / "resolved_config.json"
+            resolved_path.write_text(json.dumps(config, indent=2))
+            mlflow.log_artifact(str(resolved_path), artifact_path="config")
+
+            env_path = Path(tmp_dir) / "environment.json"
+            env_path.write_text(json.dumps(env_info, indent=2))
+            mlflow.log_artifact(str(env_path), artifact_path="environment")
+
+        _export_and_log_model(estimator, dataset.X_train.shape[1])
         run_id = run.info.run_id
 
-    if not register:
-        print(f"run_id={run_id} (REGISTER_MODEL=false)")
+    if args.register_model or config["mlflow"].get("register_model", False):
+        metadata = {
+            "candidate_name": config["candidate"]["name"],
+            "dataset_source": config["dataset"]["source"],
+            "dataset_name": config["dataset"]["name"],
+            "train_run_id": run_id,
+            "validation_status": "passed",
+            "runtime_target": "onnxruntime",
+            "fit_time_sec": fit_time_sec,
+            "val_accuracy": metrics["val_accuracy"],
+            "val_macro_f1": metrics["val_macro_f1"],
+            "build_sha": env_info["git_sha"],
+        }
+        model_name, version = _register_model(
+            tracking_uri=tracking_uri,
+            run_id=run_id,
+            model_name=config["mlflow"]["registered_model_name"],
+            alias=alias,
+            metadata=metadata,
+        )
+        print(
+            f"registered {model_name} version={version} alias={alias or 'none'} run_id={run_id}"
+        )
         return
 
-    model_uri = f"runs:/{run_id}/model"
-    mv = mlflow.register_model(model_uri=model_uri, name=model_name)
-    ver = str(mv.version)
-    client = MlflowClient(tracking_uri=tracking)
-
-    tags = {
-        "git_sha": git_sha,
-        "dataset_version": dataset_version,
-        "train_run_id": run_id,
-        "framework": "sklearn",
-        "export_format": "onnx",
-        "validation_status": "passed",
-        "benchmark_status": "pending",
-        "created_by": os.environ.get("USER", os.environ.get("USERNAME", "unknown")),
-        "runtime_target": os.environ.get("RUNTIME_TARGET", "onnxruntime"),
-    }
-    for k, v in tags.items():
-        client.set_model_version_tag(model_name, ver, k, v)
-
-    client.set_registered_model_alias(model_name, "staging", ver)
-    print(f"registered {model_name} version={ver} alias=staging run_id={run_id}")
+    print(f"run_id={run_id}")
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyError as exc:
-        print(f"Missing env: {exc}", file=sys.stderr)
-        sys.exit(1)
+    main()

@@ -1,0 +1,23 @@
+{
+  "dataset": {
+    "source": "sklearn_builtin",
+    "name": "iris",
+    "test_size": 0.2,
+    "random_state": 42
+  },
+  "candidate": {
+    "name": "logistic_regression",
+    "params": {
+      "C": 1.0,
+      "max_iter": 1000
+    }
+  },
+  "mlflow": {
+    "tracking_uri": "http://127.0.0.1:30601",
+    "experiment_name": "mealie-model-serve-training",
+    "run_name": "iris-logreg-baseline",
+    "registered_model_name": "food-classifier-baseline",
+    "register_model": true,
+    "register_alias": "baseline"
+  }
+}
