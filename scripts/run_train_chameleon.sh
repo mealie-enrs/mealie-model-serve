@@ -14,6 +14,22 @@ shift || true
 : "${AWS_SECRET_ACCESS_KEY:?Set AWS_SECRET_ACCESS_KEY}"
 : "${TRAIN_IMAGE:=mealie-model-serve-train:latest}"
 
+REPO_ROOT="$(pwd)"
+CONFIG_ABS="$(CONFIG_PATH="${CONFIG_PATH}" python3 - <<'PY'
+from pathlib import Path
+import os
+print(Path(os.environ["CONFIG_PATH"]).resolve())
+PY
+)"
+
+case "${CONFIG_ABS}" in
+  "${REPO_ROOT}"/*) CONFIG_IN_CONTAINER="/app/${CONFIG_ABS#${REPO_ROOT}/}" ;;
+  *)
+    echo "Config path must live under ${REPO_ROOT}: ${CONFIG_ABS}" >&2
+    exit 1
+    ;;
+esac
+
 docker build -f Dockerfile.train -t "${TRAIN_IMAGE}" .
 
 docker run --rm \
@@ -22,6 +38,6 @@ docker run --rm \
   -e AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}" \
   -e AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}" \
   -e AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}" \
-  -v "$(pwd)/trainer:/app/trainer" \
+  -v "${REPO_ROOT}:/app" \
   "${TRAIN_IMAGE}" \
-  --config "${CONFIG_PATH}" "$@"
+  --config "${CONFIG_IN_CONTAINER}" "$@"

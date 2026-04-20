@@ -70,7 +70,10 @@ def _client(tracking_uri: str) -> MlflowClient:
 
 def _get_registered_tags(client: MlflowClient, model: str) -> dict[str, str]:
     registered = client.get_registered_model(model)
-    return {tag.key: tag.value for tag in registered.tags}
+    tags = registered.tags or {}
+    if isinstance(tags, dict):
+        return {str(key): str(value) for key, value in tags.items()}
+    return {tag.key: tag.value for tag in tags}
 
 
 def _set_registered_tag(client: MlflowClient, model: str, key: str, value: str) -> None:
@@ -140,6 +143,7 @@ def _promote(args: argparse.Namespace, policy: dict[str, Any]) -> int:
     _set_registered_tag(client, args.model, "rollout.last_gate_details", json.dumps({"production": prod_bench, "canary": canary_bench}))
 
     if not passed:
+        _set_router_weight(args.router_url, float(policy["router"]["stable_canary_weight"]))
         print(json.dumps({"ok": False, "action": "rejected", "production": prod_bench, "canary": canary_bench}, indent=2))
         return 1
 

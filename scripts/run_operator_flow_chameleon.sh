@@ -96,6 +96,7 @@ tar czf - \
   Dockerfile.train \
   requirements-train.txt \
   trainer \
+  ops \
   scripts/build_feedback_dataset.py | \
   ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=accept-new "${SSH_USER}@${HOST}" \
     "mkdir -p ${REMOTE_WORKSPACE} && tar xzf - -C ${REMOTE_WORKSPACE}"
@@ -261,16 +262,30 @@ alias_version="$(
 
 controller_log=""
 if [[ "${CONTROLLER_CHECK}" = "1" && "${MODEL_ALIAS}" = "canary" ]]; then
-  job_name="mms-rollout-controller-manual-$(date +%s)"
-  sudo k3s kubectl create job -n mms --from=cronjob/mms-rollout-controller "${job_name}" >/dev/null
-  for _ in $(seq 1 30); do
-    succeeded="$(sudo k3s kubectl get job -n mms "${job_name}" -o jsonpath="{.status.succeeded}" 2>/dev/null || true)"
-    if [[ "${succeeded}" = "1" ]]; then
-      break
-    fi
-    sleep 2
-  done
-  controller_log="$(sudo k3s kubectl logs -n mms "job/${job_name}" --tail=200)"
+  set +e
+  controller_log="$(
+    docker run --rm \
+      --network host \
+      -e MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI}" \
+      -v "${PWD}/ops:/app/ops" \
+      --entrypoint python \
+      "${TRAIN_IMAGE}" \
+      /app/ops/rollout_controller.py \
+      --mode monitor \
+      --tracking-uri "${MLFLOW_TRACKING_URI}" \
+      --model "${MODEL_NAME}" \
+      --production-url "http://127.0.0.1:30608" \
+      --canary-url "http://127.0.0.1:30609" \
+      --router-url "http://127.0.0.1:30610" \
+      --policy /app/ops/rollout_policy.json 2>&1
+  )"
+  controller_exit_code=$?
+  set -e
+  if [[ "${controller_exit_code}" = "0" ]]; then
+    controller_status="succeeded"
+  else
+    controller_status="failed"
+  fi
 fi
 
 python3 - <<PY
@@ -294,6 +309,9 @@ summary = {
     "mlflow_run_url": f"{os.environ['PUBLIC_MLFLOW_URL']}/#/experiments/2/runs/${run_id}".strip(),
     "controller_check": ${CONTROLLER_CHECK},
 }
+if "${CONTROLLER_CHECK}" == "1" and "${MODEL_ALIAS}" == "canary":
+    summary["controller_job_status"] = "${controller_status}".strip()
+    summary["controller_exit_code"] = int("${controller_exit_code}".strip() or "0")
 if """${controller_log}""".strip():
     summary["controller_log"] = """${controller_log}"""
 print(json.dumps(summary, indent=2))

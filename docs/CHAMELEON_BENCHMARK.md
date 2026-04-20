@@ -2,6 +2,36 @@
 
 Course requirement: experiments should run **on Chameleon**, **from inside a container** on a compute instance (local-only runs are for dev).
 
+## Reference hardware: `proj26-mealie-node-gpu`
+
+Recorded **2026-04-18** from `lscpu` and `nvidia-smi` on the project GPU node.
+
+| Component | Details |
+|-----------|---------|
+| **CPU** | Intel Xeon Platinum 8380 @ 2.30GHz — **2** sockets × **40** cores/socket × **2** threads/core = **160** logical CPUs, x86_64, **2** NUMA nodes |
+| **GPU** | **4×** NVIDIA A100 **80GB** PCIe — NVIDIA driver **560.35.05**, **CUDA 12.6** (per `nvidia-smi`); MIG **disabled** in that snapshot |
+
+**SSH example (IP may change with allocation):**
+
+```bash
+ssh -o IdentitiesOnly=yes -i ~/.ssh/id_rsa_chameleon cc@192.5.87.188
+```
+
+## Reference hardware: `proj26-mealie-node-cpu`
+
+Recorded **2026-04-18** from `lscpu` on the project CPU node (no discrete GPU in this inventory).
+
+| Component | Details |
+|-----------|---------|
+| **CPU** | Intel Xeon Gold 6240R @ 2.40GHz — **2** sockets × **24** cores/socket × **2** threads/core = **96** logical CPUs, x86_64, **2** NUMA nodes |
+| **GPU** | Not recorded here — use `nvidia-smi` / `lspci` on the host if a GPU is present |
+
+**SSH example (IP may change with allocation):**
+
+```bash
+ssh -o IdentitiesOnly=yes -i ~/.ssh/id_rsa_chameleon cc@192.5.87.45
+```
+
 ## 1) VM + Docker
 
 - Use your project KVM instance (or bare metal if allocated).

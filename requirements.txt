@@ -6,6 +6,7 @@ numpy==1.26.4
 scikit-learn==1.5.2
 skl2onnx==1.17.0
 onnx==1.17.0
+optuna==4.4.0
 
 # Serving
 fastapi==0.115.12

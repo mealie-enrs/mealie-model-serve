@@ -1,0 +1,132 @@
+name: Rollout model
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_name:
+        description: "Registered MLflow model name (pick from the MLflow Models tab)"
+        required: true
+        default: "food-classifier"
+        type: string
+      version:
+        description: "MLflow model version to roll out"
+        required: true
+        type: string
+      target:
+        description: "Serving target alias"
+        required: true
+        default: "canary"
+        type: choice
+        options:
+          - canary
+          - production
+      reload_service:
+        description: "Reload the target service after moving the alias"
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  rollout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY_B64: ${{ secrets.SSH_PRIVATE_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -z "${SSH_HOST:-}" ] && missing="${missing} SSH_HOST"
+          [ -z "${SSH_USER:-}" ] && missing="${missing} SSH_USER"
+          if [ -z "${SSH_PRIVATE_KEY:-}" ] && [ -z "${SSH_PRIVATE_KEY_B64:-}" ]; then
+            missing="${missing} SSH_PRIVATE_KEY_OR_B64"
+          fi
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing"
+            exit 1
+          fi
+
+      - name: Prepare SSH private key file
+        id: sshkey
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY_B64: ${{ secrets.SSH_PRIVATE_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          KEYFILE="${RUNNER_TEMP}/gha_rollout_key"
+          if [ -n "${SSH_PRIVATE_KEY_B64:-}" ]; then
+            printf '%s' "${SSH_PRIVATE_KEY_B64}" | tr -d ' \n\r\t' | base64 -d > "${KEYFILE}"
+          else
+            printf '%s\n' "${SSH_PRIVATE_KEY}" > "${KEYFILE}"
+          fi
+          chmod 600 "${KEYFILE}"
+          echo "keyfile=${KEYFILE}" >> "$GITHUB_OUTPUT"
+
+      - name: Roll out model alias and reload target
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          MODEL_NAME: ${{ inputs.model_name }}
+          VERSION: ${{ inputs.version }}
+          TARGET: ${{ inputs.target }}
+          RELOAD_SERVICE: ${{ inputs.reload_service }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key_path: ${{ steps.sshkey.outputs.keyfile }}
+          envs: MODEL_NAME,VERSION,TARGET,RELOAD_SERVICE
+          script: |
+            set -euo pipefail
+            cd ~/mealie-model-serve
+            export MLFLOW_TRACKING_URI=http://127.0.0.1:30601
+            TRAIN_IMAGE="mealie-model-serve-train:rollout"
+
+            if [ "${TARGET}" = "canary" ]; then
+              SERVICE_URL="http://127.0.0.1:30609"
+            else
+              SERVICE_URL="http://127.0.0.1:30608"
+            fi
+
+            docker build -f Dockerfile.train -t "${TRAIN_IMAGE}" .
+
+            docker run --rm \
+              --network host \
+              -e MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI}" \
+              -v "$PWD:/app" \
+              --entrypoint python \
+              "${TRAIN_IMAGE}" \
+              /app/ops/promote_alias.py \
+              --model "${MODEL_NAME}" \
+              --alias "${TARGET}" \
+              --version "${VERSION}"
+
+            if [ "${RELOAD_SERVICE}" = "true" ]; then
+              curl -fsS -X POST "${SERVICE_URL}/reload" \
+                -H 'Content-Type: application/json' \
+                -d "{\"model_uri\":\"models:/${MODEL_NAME}@${TARGET}\"}"
+            fi
+
+            python3 - <<PY
+            import json
+            import urllib.request
+
+            url = "${SERVICE_URL}/metadata"
+            with urllib.request.urlopen(url, timeout=20) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+            print(json.dumps(payload, indent=2))
+            PY
+
+      - name: Write rollout summary
+        run: |
+          {
+            echo "## Rollout complete"
+            echo
+            echo "- model: \`${{ inputs.model_name }}\`"
+            echo "- version: \`${{ inputs.version }}\`"
+            echo "- target: \`${{ inputs.target }}\`"
+            echo "- reload: \`${{ inputs.reload_service }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

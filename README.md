@@ -160,6 +160,27 @@ It provides:
 
 Captured feedback is written under `/var/lib/mms-feedback` and can be converted into an NPZ retraining set with `scripts/build_feedback_dataset.py`.
 
+The same builder now also accepts the curated Mealie/DMS feedback artifact produced by Airflow:
+
+- input: `recipe_feedback_labels/.../feedback_labels.parquet`
+- output: `npz_classification` dataset + `.labels.json`
+
+For a one-command retrain from that curated artifact, use:
+
+```bash
+bash scripts/run_mealie_feedback_retraining.sh \
+  tmp/feedback_labels.parquet \
+  tmp/mealie-feedback-dataset.npz \
+  tmp/mealie-feedback-config.json
+```
+
+That script:
+
+1. converts the curated parquet into an NPZ dataset
+2. writes a config-driven training file
+3. launches the standard training container
+4. registers the resulting model in MLflow with the chosen alias
+
 For the full loop, see `docs/ROLLOUT_AUTOMATION.md`.
 
 ## Acceptance checklist (spec §11)

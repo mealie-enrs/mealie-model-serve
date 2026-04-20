@@ -50,6 +50,26 @@ Feedback logs are persisted under `/var/lib/mms-feedback`.
 
 Use `scripts/build_feedback_dataset.py` to convert those logs into an `npz_classification` dataset, then run a retraining cycle and register the next candidate as `@canary`.
 
+For the Mealie-integrated flow, the same builder can consume the curated Airflow artifact:
+
+- source artifact: `feedback_labels.parquet`
+- produced by: DMS `training_data_assembly -> write_feedback_labels`
+- training bridge: `scripts/run_mealie_feedback_retraining.sh`
+- object-store handoff path example:
+  `swift://proj26-obj-store/airflow-fallback/recipe_feedback_labels/snapshot_date=YYYY-MM-DD/feedback_labels.parquet`
+
+That path lets you demo:
+
+1. feedback captured in Mealie/DMS
+2. Airflow compiles a curated feedback artifact
+3. model-serve converts that artifact into `npz_classification`
+4. standard MLflow training + registration runs on Chameleon
+
+Important note:
+
+- the curated artifact must contain at least two distinct labels for the chosen training target
+- if the artifact only contains one approved recipe class, dataset build succeeds but classifier training should be treated as blocked by insufficient supervision rather than forced through
+
 That gives you a demo loop:
 
 1. weighted production traffic
@@ -94,4 +114,11 @@ The script prints a JSON summary with:
 - curated dataset path and size
 - MLflow run id and public run URL
 - registered alias version
-- rollout-controller logs when `--controller-check` is used
+- rollout-controller exit code and logs when `--controller-check` is used
+
+When `--alias canary --controller-check` is used, the controller may do one of two valid things:
+
+- refresh and promote the canary if the gate passes
+- refresh and reject the canary if it regresses on the configured gate
+
+Both outcomes are useful for the demo because they show the promotion logic is active rather than blindly advancing every new model.

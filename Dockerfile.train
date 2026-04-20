@@ -13,5 +13,7 @@ COPY requirements-train.txt .
 RUN pip install --no-cache-dir -r requirements-train.txt
 
 COPY trainer ./trainer
+COPY scripts ./scripts
+COPY ops ./ops
 
 ENTRYPOINT ["python", "-m", "trainer.train"]
