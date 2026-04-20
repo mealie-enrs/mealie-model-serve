@@ -19,7 +19,7 @@ def main() -> None:
     p.add_argument(
         "--set-alias",
         default=None,
-        choices=("staging", "canary", "champion"),
+        choices=("staging", "canary", "champion", "production"),
         help="Optional alias to assign to the new version",
     )
     args = p.parse_args()

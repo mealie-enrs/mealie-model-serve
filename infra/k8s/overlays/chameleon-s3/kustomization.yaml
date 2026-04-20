@@ -18,6 +18,7 @@ resources:
   - ../../postgres.yaml
   - ../../mlflow.yaml
   - ../../model-serve.yaml
+  - ../../model-serve-canary.yaml
   - ../../job-seed-toy-model.yaml
 images:
   - name: mealie-model-serve-mlflow
@@ -69,6 +70,14 @@ patches:
   - target:
       kind: Deployment
       name: mms-model-serve
+      namespace: mms
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+  - target:
+      kind: Deployment
+      name: mms-model-serve-canary
       namespace: mms
     patch: |-
       - op: replace

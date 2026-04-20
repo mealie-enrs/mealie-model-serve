@@ -1,6 +1,6 @@
 output "floating_ip" {
   value       = openstack_networking_floatingip_v2.mms_fip.address
-  description = "Public IP for SSH, MLflow (30601), model API (30608)"
+  description = "Public IP for SSH, MLflow (30601), production model API (30608), canary model API (30609)"
 }
 
 output "ssh_command" {

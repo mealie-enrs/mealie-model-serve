@@ -29,6 +29,19 @@ spec:
           hostnames:
             - "chi.uc.chameleoncloud.org"
 ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mms-model-serve-canary
+  namespace: mms
+spec:
+  template:
+    spec:
+      hostAliases:
+        - ip: "192.5.87.2"
+          hostnames:
+            - "chi.uc.chameleoncloud.org"
+---
 apiVersion: batch/v1
 kind: Job
 metadata:

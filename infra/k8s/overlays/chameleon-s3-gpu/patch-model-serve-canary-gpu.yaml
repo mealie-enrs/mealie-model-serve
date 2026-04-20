@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mms-model-serve-canary
+  namespace: mms
+spec:
+  template:
+    spec:
+      runtimeClassName: nvidia
+      containers:
+        - name: model-serve
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+            requests:
+              cpu: "2"
+              memory: "4Gi"

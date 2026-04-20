@@ -18,3 +18,12 @@ metadata:
 spec:
   strategy:
     type: Recreate
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mms-model-serve-canary
+  namespace: mms
+spec:
+  strategy:
+    type: Recreate

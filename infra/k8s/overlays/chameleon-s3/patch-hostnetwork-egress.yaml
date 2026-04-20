@@ -23,6 +23,17 @@ spec:
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
 ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mms-model-serve-canary
+  namespace: mms
+spec:
+  template:
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+---
 apiVersion: batch/v1
 kind: Job
 metadata:

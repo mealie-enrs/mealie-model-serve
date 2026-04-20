@@ -1,6 +1,6 @@
 # Mealie Model Serve
 
-Build-ready **v1** layout for a Chameleon-friendly model platform: **MLflow + PostgreSQL + MinIO**, training → **Model Registry** with **aliases** (`staging`, `canary`, `champion`), and a **FastAPI + ONNX Runtime** serving plane with **local cache**, **`/reload`**, and **Prometheus** metrics.
+Build-ready **v1** layout for a Chameleon-friendly model platform: **MLflow + PostgreSQL + MinIO**, training → **Model Registry** with **aliases** (`staging`, `canary`, `champion`, `production`), and a **FastAPI + ONNX Runtime** serving plane with **local cache**, **`/reload`**, and **Prometheus** metrics.
 
 ## Repo layout (spec §14)
 
@@ -63,7 +63,7 @@ export MODEL_NAME=food-classifier
 python trainer/train.py
 ```
 
-This registers **`food-classifier`** version **1**, sets tags (spec §7), and assigns **`@staging`**.
+This registers **`food-classifier`** version **1**, sets tags (spec §7), and assigns the configured alias.
 
 Train again (no code change) to get **version 2**; only the latest run gets `@staging` if you re-run `train.py` as-is (script sets alias to new version).
 
@@ -76,7 +76,7 @@ docker compose -f infra/docker-compose.serving.yml up -d --build
 ```
 
 - **API:** `http://localhost:18080`
-- Default **`MODEL_URI=models:/food-classifier@staging`**
+- Default **`MODEL_URI=models:/food-classifier@production`**
 
 ### Endpoints (spec §8 + FR-5/9)
 
@@ -101,7 +101,8 @@ curl -s http://127.0.0.1:18080/predict -H 'Content-Type: application/json' \
 
 ```bash
 export MLFLOW_TRACKING_URI=http://127.0.0.1:15001
-PYTHONPATH=. python ops/promote_alias.py --model food-classifier --alias champion --version 1
+PYTHONPATH=. python ops/promote_alias.py --model food-classifier --alias production --version 1
+PYTHONPATH=. python ops/promote_alias.py --model food-classifier --alias canary --version 2
 PYTHONPATH=. python ops/rollback_alias.py --model food-classifier --alias staging --version 1
 PYTHONPATH=. python ops/benchmark_candidate.py --model food-classifier --version 1 --status passed
 ```
@@ -111,8 +112,37 @@ Then reload serving:
 ```bash
 curl -s -X POST http://127.0.0.1:18080/reload \
   -H 'Content-Type: application/json' \
-  -d '{"model_uri":"models:/food-classifier@champion"}' | jq .
+  -d '{"model_uri":"models:/food-classifier@production"}' | jq .
 ```
+
+## Production + canary rollout on Kubernetes
+
+The Kubernetes manifests now ship two serving deployments:
+
+- `mms-model-serve` on `:30608` serving `models:/food-classifier@production`
+- `mms-model-serve-canary` on `:30609` serving `models:/food-classifier@canary`
+
+That gives you:
+
+- a stable public endpoint for DMS / app traffic
+- a second public endpoint to test a candidate build or candidate model
+- alias-based cutover with no image rebuild
+
+Example rollout flow:
+
+```bash
+export MLFLOW_TRACKING_URI=http://127.0.0.1:30601
+
+PYTHONPATH=. python ops/promote_alias.py --model food-classifier --alias production --version 3
+PYTHONPATH=. python ops/promote_alias.py --model food-classifier --alias canary --version 4
+
+curl -s -X POST http://<ip>:30608/reload -H 'Content-Type: application/json' \
+  -d '{"model_uri":"models:/food-classifier@production"}' | jq .
+curl -s -X POST http://<ip>:30609/reload -H 'Content-Type: application/json' \
+  -d '{"model_uri":"models:/food-classifier@canary"}' | jq .
+```
+
+If the canary looks good, point `production` at that version and reload only the stable deployment.
 
 ## Acceptance checklist (spec §11)
 
@@ -146,7 +176,7 @@ Default MinIO credentials and ports are for **local dev only**. For Chameleon: p
 
 In repo now: control plane, trainer MVP, registry + aliases, serving + reload + Prometheus metrics, ops scripts (+ benchmark stub).
 
-Later: canary traffic split, Triton/TensorRT, Octavia LB, automated promotion gates.
+Later: weighted canary traffic split, Triton/TensorRT, Octavia LB, automated promotion gates.
 
 ## GitHub Actions + Terraform
 

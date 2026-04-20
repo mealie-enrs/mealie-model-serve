@@ -8,6 +8,7 @@ resources:
   - minio.yaml
   - mlflow.yaml
   - model-serve.yaml
+  - model-serve-canary.yaml
 # Default to GHCR so a fresh cluster can boot without a local image import step.
 # CI can still override tags during rollout.
 images:
@@ -31,6 +32,14 @@ patches:
   - target:
       kind: Deployment
       name: mms-model-serve
+      namespace: mms
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+  - target:
+      kind: Deployment
+      name: mms-model-serve-canary
       namespace: mms
     patch: |-
       - op: replace

@@ -7,3 +7,4 @@ resources:
 patches:
   - path: patch-config-gpu.yaml
   - path: patch-model-serve-gpu.yaml
+  - path: patch-model-serve-canary-gpu.yaml

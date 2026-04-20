@@ -33,6 +33,16 @@ resource "openstack_networking_secgroup_rule_v2" "model_serve_nodeport" {
   security_group_id = openstack_networking_secgroup_v2.mms.id
 }
 
+resource "openstack_networking_secgroup_rule_v2" "model_serve_canary_nodeport" {
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 30609
+  port_range_max    = 30609
+  remote_ip_prefix  = var.allowed_mms_cidr
+  security_group_id = openstack_networking_secgroup_v2.mms.id
+}
+
 resource "openstack_networking_secgroup_rule_v2" "k8s_api" {
   direction         = "ingress"
   ethertype         = "IPv4"
@@ -53,6 +63,7 @@ resource "null_resource" "create_reserved_server" {
     openstack_networking_secgroup_rule_v2.ssh,
     openstack_networking_secgroup_rule_v2.mlflow_nodeport,
     openstack_networking_secgroup_rule_v2.model_serve_nodeport,
+    openstack_networking_secgroup_rule_v2.model_serve_canary_nodeport,
     openstack_networking_secgroup_rule_v2.k8s_api,
   ]
 

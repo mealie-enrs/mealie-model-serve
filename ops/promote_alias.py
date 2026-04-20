@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assign a registry alias (staging | canary | champion) to a model version."""
+"""Assign a registry alias (staging | canary | champion | production) to a model version."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import sys
 
 from mlflow.tracking import MlflowClient
 
-ALIASES = ("staging", "canary", "champion")
+ALIASES = ("staging", "canary", "champion", "production")
 
 
 def main() -> None:

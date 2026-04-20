@@ -197,7 +197,7 @@ jobs:
                 --docker-username="${DOCKER_USER}" \
                 --docker-password="${GHCR_PULL_TOKEN}" \
                 -n "${NS}" --dry-run=client -o yaml | sudo k3s kubectl apply -f -
-              for d in mms-mlflow mms-model-serve; do
+              for d in mms-mlflow mms-model-serve mms-model-serve-canary; do
                 sudo k3s kubectl patch deployment "$d" -n "${NS}" --type=strategic -p \
                   '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"ghcr-pull"}]}}}}' || true
               done
@@ -205,6 +205,7 @@ jobs:
 
             sudo k3s kubectl set image deployment/mms-mlflow mlflow="${MLF_IMG}" -n "${NS}"
             sudo k3s kubectl set image deployment/mms-model-serve model-serve="${API_IMG}" -n "${NS}"
+            sudo k3s kubectl set image deployment/mms-model-serve-canary model-serve="${API_IMG}" -n "${NS}"
 
             # MLflow pulls artifacts / waits on S3 — allow longer than the API deployment.
             if ! sudo k3s kubectl rollout status deployment/mms-mlflow -n "${NS}" --timeout=600s; then
@@ -215,3 +216,4 @@ jobs:
               exit 1
             fi
             sudo k3s kubectl rollout status deployment/mms-model-serve -n "${NS}" --timeout=400s
+            sudo k3s kubectl rollout status deployment/mms-model-serve-canary -n "${NS}" --timeout=400s

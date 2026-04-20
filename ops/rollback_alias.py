@@ -9,7 +9,7 @@ import sys
 
 from mlflow.tracking import MlflowClient
 
-ALIASES = ("staging", "canary", "champion")
+ALIASES = ("staging", "canary", "champion", "production")
 
 
 def main() -> None:

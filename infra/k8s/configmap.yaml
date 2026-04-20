@@ -14,5 +14,7 @@ data:
   # In-cluster MLflow URL for model-serve
   MLFLOW_TRACKING_URI: "http://mlflow:5000"
   MLFLOW_REGISTRY_URI: "http://mlflow:5000"
-  MODEL_URI: "models:/food-classifier@staging"
+  MODEL_URI: "models:/food-classifier@production"
+  MODEL_URI_PRODUCTION: "models:/food-classifier@production"
+  MODEL_URI_CANARY: "models:/food-classifier@canary"
   MODEL_PROVIDER: "cpu"

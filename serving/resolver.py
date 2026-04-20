@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from mlflow.tracking import MlflowClient
 
 # Allowed registry aliases (spec §7)
-ALIASES = frozenset({"staging", "canary", "champion"})
+ALIASES = frozenset({"staging", "canary", "champion", "production"})
 
 MODEL_URI_RE = re.compile(r"^models:/([^/@]+)(?:/(\d+)|@([\w-]+))$")
 

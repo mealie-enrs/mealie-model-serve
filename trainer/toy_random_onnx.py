@@ -50,7 +50,11 @@ def main() -> None:
     p.add_argument("--tracking-uri", default=os.environ.get("MLFLOW_TRACKING_URI"))
     p.add_argument("--experiment", default="mealie-model-serve")
     p.add_argument("--register", action="store_true")
-    p.add_argument("--alias", default="staging", choices=("staging", "canary", "champion"))
+    p.add_argument(
+        "--alias",
+        default="staging",
+        choices=("staging", "canary", "champion", "production"),
+    )
     args = p.parse_args()
     if not args.tracking_uri:
         raise SystemExit("Set MLFLOW_TRACKING_URI")

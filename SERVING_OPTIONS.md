@@ -18,6 +18,17 @@ Image: `mealie-model-serve-api:local` (build via `infra/docker-compose.serving.y
 
 **GPU row (optional):** set `MODEL_PROVIDER=cuda` on a Chameleon GPU node and add a row.
 
+## Rollout lanes
+
+For the deployed k3s stack, use separate rollout lanes:
+
+| Lane | URL | Registry alias | Purpose |
+|------|-----|----------------|---------|
+| production | `http://<ip>:30608` | `production` | Stable endpoint for app traffic |
+| canary | `http://<ip>:30609` | `canary` | Candidate validation before promotion |
+
+This is endpoint-level canarying, not weighted traffic splitting yet.
+
 ## Results table (copy to your report after Chameleon runs)
 
 ⭐ = best for that priority column (latency / cost / simplicity).

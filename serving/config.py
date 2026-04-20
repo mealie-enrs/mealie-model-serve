@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     )
 
     model_uri: str = Field(
-        default="models:/food-classifier@champion",
+        default="models:/food-classifier@production",
         validation_alias=AliasChoices("MODEL_URI"),
     )
     model_cache_dir: str = Field(

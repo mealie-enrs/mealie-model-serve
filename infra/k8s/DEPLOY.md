@@ -10,7 +10,7 @@
 
 This repo’s **Docker Compose** stack is the same components; **Kubernetes** just schedules them as Pods + Services + PVCs.
 
-**Terraform note:** Use **`mealie-model-serve/infra/terraform`** for a dedicated MMS VM. It now opens **22**, **6443**, **30601**, and **30608**, installs Docker + k3s, and configures NVIDIA runtime support in cloud-init. Terraform provisions the VM; workload rollout still happens via **kustomize/kubectl**.
+**Terraform note:** Use **`mealie-model-serve/infra/terraform`** for a dedicated MMS VM. It now opens **22**, **6443**, **30601**, **30608**, and **30609**, installs Docker + k3s, and configures NVIDIA runtime support in cloud-init. Terraform provisions the VM; workload rollout still happens via **kustomize/kubectl**.
 
 We **cannot** verify `192.5.86.170` from the assistant’s environment; after SSH, run `kubectl get nodes` to confirm.
 
@@ -66,6 +66,7 @@ kubectl kustomize infra/k8s/overlays/chameleon-s3-gpu \
   --load-restrictor LoadRestrictionsNone | kubectl apply -f -
 kubectl -n mms rollout status deployment/mms-mlflow --timeout=300s
 kubectl -n mms rollout status deployment/mms-model-serve --timeout=300s
+kubectl -n mms rollout status deployment/mms-model-serve-canary --timeout=300s
 ```
 
 ---
@@ -89,9 +90,10 @@ and MinIO/S3 env pointing at **`http://<FLOATING_IP>:<minio-nodeport>`** — Min
 | Service | URL |
 |---------|-----|
 | MLflow UI | `http://<IP>:30601` |
-| Model API | `http://<IP>:30608` (e.g. `/metadata`, `/predict`) |
+| Production model API | `http://<IP>:30608` (e.g. `/metadata`, `/predict`) |
+| Canary model API | `http://<IP>:30609` (e.g. `/metadata`, `/predict`) |
 
-**Security group:** allow **TCP 30601** and **30608** (and any extra NodePorts you add) from where you browse/curl.
+**Security group:** allow **TCP 30601**, **30608**, and **30609** from where you browse/curl.
 
 ---
 
@@ -116,6 +118,16 @@ resource "openstack_networking_secgroup_rule_v2" "mms_api" {
   protocol          = "tcp"
   port_range_min    = 30608
   port_range_max    = 30608
+  remote_ip_prefix  = var.allowed_api_cidr
+  security_group_id = openstack_networking_secgroup_v2.dms.id
+}
+
+resource "openstack_networking_secgroup_rule_v2" "mms_api_canary" {
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 30609
+  port_range_max    = 30609
   remote_ip_prefix  = var.allowed_api_cidr
   security_group_id = openstack_networking_secgroup_v2.dms.id
 }
@@ -205,7 +217,7 @@ Point **`MLFLOW_S3_ENDPOINT_URL`** at the **7480** URL, set **`MLFLOW_ARTIFACTS_
 
 ## GitHub Actions (build → GHCR → k3s)
 
-Workflow: **`.github/workflows/deploy.yml`**. On every push to **`main`**, it builds **`linux/amd64`** images, pushes to **`ghcr.io/<lowercase-github-owner>/mealie-model-serve-{mlflow,api}`** (tags **`:<12-char-sha>`** and **`:latest`**), then SSHes to your VM, reapplies the **`chameleon-s3-gpu`** overlay, and rolls **`mms-mlflow`** and **`mms-model-serve`** forward in namespace **`mms`**.
+Workflow: **`.github/workflows/deploy.yml`**. On every push to **`main`**, it builds **`linux/amd64`** images, pushes to **`ghcr.io/<lowercase-github-owner>/mealie-model-serve-{mlflow,api}`** (tags **`:<12-char-sha>`** and **`:latest`**), then SSHes to your VM, reapplies the **`chameleon-s3-gpu`** overlay, and rolls **`mms-mlflow`**, **`mms-model-serve`**, and **`mms-model-serve-canary`** forward in namespace **`mms`**.
 
 There is also a manual infrastructure workflow: **`.github/workflows/terraform-apply.yml`**, which can run Terraform plan/apply for the GPU VM itself if you load the required OpenStack secrets into GitHub Actions.
 
