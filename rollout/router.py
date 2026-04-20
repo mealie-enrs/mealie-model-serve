@@ -10,7 +10,7 @@ import time
 import uuid
 from collections import Counter
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -47,7 +47,7 @@ CANARY_WEIGHT = Gauge(
 
 def _feedback_path() -> Path:
     router_settings.feedback_dir.mkdir(parents=True, exist_ok=True)
-    return router_settings.feedback_dir / f"feedback-{datetime.now(UTC):%Y%m%d}.jsonl"
+    return router_settings.feedback_dir / f"feedback-{datetime.now(timezone.utc):%Y%m%d}.jsonl"
 
 
 def _read_recent_feedback(limit: int = 5000) -> list[dict[str, Any]]:
@@ -204,7 +204,7 @@ async def predict(body: PredictBody, x_mms_lane: str | None = Header(default=Non
 def feedback(body: FeedbackBody) -> dict[str, Any]:
     row = {
         **body.model_dump(),
-        "event_time": datetime.now(UTC).isoformat(),
+        "event_time": datetime.now(timezone.utc).isoformat(),
     }
     _append_feedback(row)
     FEEDBACK_WRITES.labels("accepted" if body.accepted_prediction else "corrected").inc()
