@@ -201,12 +201,15 @@ jobs:
                 sudo k3s kubectl patch deployment "$d" -n "${NS}" --type=strategic -p \
                   '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"ghcr-pull"}]}}}}' || true
               done
+              sudo k3s kubectl patch cronjob mms-rollout-controller -n "${NS}" --type=strategic -p \
+                '{"spec":{"jobTemplate":{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"ghcr-pull"}]}}}}}' || true
             fi
 
             sudo k3s kubectl set image deployment/mms-mlflow mlflow="${MLF_IMG}" -n "${NS}"
             sudo k3s kubectl set image deployment/mms-model-serve model-serve="${API_IMG}" -n "${NS}"
             sudo k3s kubectl set image deployment/mms-model-serve-canary model-serve="${API_IMG}" -n "${NS}"
             sudo k3s kubectl set image deployment/mms-rollout-router rollout-router="${API_IMG}" -n "${NS}"
+            sudo k3s kubectl set image cronjob/mms-rollout-controller rollout-controller="${API_IMG}" -n "${NS}"
 
             # MLflow pulls artifacts / waits on S3 — allow longer than the API deployment.
             if ! sudo k3s kubectl rollout status deployment/mms-mlflow -n "${NS}" --timeout=600s; then
