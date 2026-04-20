@@ -72,20 +72,20 @@ jobs:
         env:
           MODEL_NAME: ${{ inputs.model_name }}
           VERSION: ${{ inputs.version }}
-          TARGET: ${{ inputs.target }}
+          ROLLOUT_TARGET: ${{ inputs.target }}
           RELOAD_SERVICE: ${{ inputs.reload_service }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key_path: ${{ steps.sshkey.outputs.keyfile }}
-          envs: MODEL_NAME,VERSION,TARGET,RELOAD_SERVICE
+          envs: MODEL_NAME,VERSION,ROLLOUT_TARGET,RELOAD_SERVICE
           script: |
             set -euo pipefail
             cd ~/mealie-model-serve
             export MLFLOW_TRACKING_URI=http://127.0.0.1:30601
             TRAIN_IMAGE="mealie-model-serve-train:rollout"
 
-            if [ "${TARGET}" = "canary" ]; then
+            if [ "${ROLLOUT_TARGET}" = "canary" ]; then
               SERVICE_URL="http://127.0.0.1:30609"
             else
               SERVICE_URL="http://127.0.0.1:30608"
@@ -101,13 +101,13 @@ jobs:
               "${TRAIN_IMAGE}" \
               /app/ops/promote_alias.py \
               --model "${MODEL_NAME}" \
-              --alias "${TARGET}" \
+              --alias "${ROLLOUT_TARGET}" \
               --version "${VERSION}"
 
             if [ "${RELOAD_SERVICE}" = "true" ]; then
               curl -fsS -X POST "${SERVICE_URL}/reload" \
                 -H 'Content-Type: application/json' \
-                -d "{\"model_uri\":\"models:/${MODEL_NAME}@${TARGET}\"}"
+                -d "{\"model_uri\":\"models:/${MODEL_NAME}@${ROLLOUT_TARGET}\"}"
             fi
 
             python3 - <<PY
