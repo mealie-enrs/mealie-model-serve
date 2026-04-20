@@ -82,6 +82,9 @@ jobs:
           script: |
             set -euo pipefail
             cd ~/mealie-model-serve
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
             export MLFLOW_TRACKING_URI=http://127.0.0.1:30601
             TRAIN_IMAGE="mealie-model-serve-train:rollout"
 
