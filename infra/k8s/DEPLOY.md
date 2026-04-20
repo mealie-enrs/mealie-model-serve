@@ -10,7 +10,7 @@
 
 This repo’s **Docker Compose** stack is the same components; **Kubernetes** just schedules them as Pods + Services + PVCs.
 
-**Terraform note:** Use **`mealie-model-serve/infra/terraform`** for a dedicated MMS VM. It now opens **22**, **6443**, **30601**, **30608**, and **30609**, installs Docker + k3s, and configures NVIDIA runtime support in cloud-init. Terraform provisions the VM; workload rollout still happens via **kustomize/kubectl**.
+**Terraform note:** Use **`mealie-model-serve/infra/terraform`** for a dedicated MMS VM. It now opens **22**, **6443**, **30601**, **30608**, **30609**, and **30610**, installs Docker + k3s, and configures NVIDIA runtime support in cloud-init. Terraform provisions the VM; workload rollout still happens via **kustomize/kubectl**.
 
 We **cannot** verify `192.5.86.170` from the assistant’s environment; after SSH, run `kubectl get nodes` to confirm.
 
@@ -67,6 +67,7 @@ kubectl kustomize infra/k8s/overlays/chameleon-s3-gpu \
 kubectl -n mms rollout status deployment/mms-mlflow --timeout=300s
 kubectl -n mms rollout status deployment/mms-model-serve --timeout=300s
 kubectl -n mms rollout status deployment/mms-model-serve-canary --timeout=300s
+kubectl -n mms rollout status deployment/mms-rollout-router --timeout=300s
 ```
 
 ---
@@ -92,8 +93,9 @@ and MinIO/S3 env pointing at **`http://<FLOATING_IP>:<minio-nodeport>`** — Min
 | MLflow UI | `http://<IP>:30601` |
 | Production model API | `http://<IP>:30608` (e.g. `/metadata`, `/predict`) |
 | Canary model API | `http://<IP>:30609` (e.g. `/metadata`, `/predict`) |
+| Weighted rollout router | `http://<IP>:30610` (e.g. `/predict`, `/feedback`, `/metadata`) |
 
-**Security group:** allow **TCP 30601**, **30608**, and **30609** from where you browse/curl.
+**Security group:** allow **TCP 30601**, **30608**, **30609**, and **30610** from where you browse/curl.
 
 ---
 

@@ -1,0 +1,18 @@
+{
+  "router": {
+    "trial_canary_weight": 0.1,
+    "stable_canary_weight": 0.0
+  },
+  "gate": {
+    "benchmark_requests": 80,
+    "benchmark_concurrency": 4,
+    "max_error_rate": 0.02,
+    "max_p50_regression_ratio": 1.15,
+    "max_p95_regression_ratio": 1.25,
+    "min_successful_requests": 60
+  },
+  "rollout": {
+    "auto_promote": true,
+    "auto_rollback": true
+  }
+}

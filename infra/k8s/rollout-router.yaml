@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mms-rollout-router
+  namespace: mms
+spec:
+  type: NodePort
+  selector:
+    app: mms-rollout-router
+  ports:
+    - name: http
+      port: 8082
+      targetPort: 8082
+      nodePort: 30610
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mms-rollout-router
+  namespace: mms
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mms-rollout-router
+  template:
+    metadata:
+      labels:
+        app: mms-rollout-router
+    spec:
+      containers:
+        - name: rollout-router
+          image: ghcr.io/mealie-enrs/mealie-model-serve-api:latest
+          imagePullPolicy: Always
+          command:
+            - uvicorn
+            - rollout.router:app
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8082"
+            - --workers
+            - "1"
+          ports:
+            - containerPort: 8082
+          env:
+            - name: ROUTER_PRODUCTION_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: mms-config
+                  key: ROUTER_PRODUCTION_URL
+            - name: ROUTER_CANARY_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: mms-config
+                  key: ROUTER_CANARY_URL
+            - name: ROUTER_DEFAULT_CANARY_WEIGHT
+              valueFrom:
+                configMapKeyRef:
+                  name: mms-config
+                  key: ROUTER_DEFAULT_CANARY_WEIGHT
+            - name: FEEDBACK_LOG_DIR
+              value: "/var/lib/mms-feedback"
+          volumeMounts:
+            - name: feedback-data
+              mountPath: /var/lib/mms-feedback
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8082
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8082
+            initialDelaySeconds: 10
+            periodSeconds: 30
+      volumes:
+        - name: feedback-data
+          persistentVolumeClaim:
+            claimName: mms-feedback-pvc

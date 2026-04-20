@@ -84,7 +84,7 @@ variable "allowed_ssh_cidr" {
 
 variable "allowed_mms_cidr" {
   type        = string
-  description = "CIDR allowed to reach mealie-model-serve NodePorts (MLflow 30601, production API 30608, canary API 30609)"
+  description = "CIDR allowed to reach mealie-model-serve NodePorts (MLflow 30601, production API 30608, canary API 30609, rollout router 30610)"
   default     = "0.0.0.0/0"
 }
 

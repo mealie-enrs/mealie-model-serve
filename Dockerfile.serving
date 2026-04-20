@@ -25,8 +25,12 @@ RUN pip install --no-cache-dir \
     httpx==0.28.1
 
 COPY serving ./serving
+COPY rollout ./rollout
+COPY ops ./ops
 COPY scripts/docker-entrypoint-serving.sh /app/scripts/docker-entrypoint-serving.sh
 COPY scripts/evaluate_serving.py /app/scripts/evaluate_serving.py
+COPY scripts/emit_production_traffic.py /app/scripts/emit_production_traffic.py
+COPY scripts/build_feedback_dataset.py /app/scripts/build_feedback_dataset.py
 RUN chmod +x /app/scripts/docker-entrypoint-serving.sh
 
 EXPOSE 8080

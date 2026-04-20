@@ -15,7 +15,9 @@ trainer/
 serving/
   app.py, resolver.py, loader.py, cache.py, metrics.py
 ops/
-  promote_alias.py, rollback_alias.py, benchmark_candidate.py (stub)
+  promote_alias.py, rollback_alias.py, benchmark_candidate.py, rollout_controller.py
+rollout/
+  router.py         # weighted production/canary traffic router + feedback capture
 infra/k8s/          # k3s / Kubernetes (same stack as Docker Compose)
 ```
 
@@ -121,6 +123,7 @@ The Kubernetes manifests now ship two serving deployments:
 
 - `mms-model-serve` on `:30608` serving `models:/food-classifier@production`
 - `mms-model-serve-canary` on `:30609` serving `models:/food-classifier@canary`
+- `mms-rollout-router` on `:30610` splitting traffic between them
 
 That gives you:
 
@@ -143,6 +146,21 @@ curl -s -X POST http://<ip>:30609/reload -H 'Content-Type: application/json' \
 ```
 
 If the canary looks good, point `production` at that version and reload only the stable deployment.
+
+## Weighted traffic, feedback, and retraining
+
+The weighted rollout entrypoint is `http://<ip>:30610`.
+
+It provides:
+
+- `POST /predict` — weighted production/canary routing
+- `POST /feedback` — capture approved outputs for retraining
+- `GET /feedback/summary` — quick demo summary of saved production supervision
+- `POST /admin/weights` — adjust canary traffic weight
+
+Captured feedback is written under `/var/lib/mms-feedback` and can be converted into an NPZ retraining set with `scripts/build_feedback_dataset.py`.
+
+For the full loop, see `docs/ROLLOUT_AUTOMATION.md`.
 
 ## Acceptance checklist (spec §11)
 

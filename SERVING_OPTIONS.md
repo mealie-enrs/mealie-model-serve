@@ -26,8 +26,9 @@ For the deployed k3s stack, use separate rollout lanes:
 |------|-----|----------------|---------|
 | production | `http://<ip>:30608` | `production` | Stable endpoint for app traffic |
 | canary | `http://<ip>:30609` | `canary` | Candidate validation before promotion |
+| weighted router | `http://<ip>:30610` | weighted split | Production-like traffic lane for demos and gradual rollout |
 
-This is endpoint-level canarying, not weighted traffic splitting yet.
+This repo now supports both endpoint-level canarying and a weighted router lane.
 
 ## Results table (copy to your report after Chameleon runs)
 

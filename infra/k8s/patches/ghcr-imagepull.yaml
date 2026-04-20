@@ -32,3 +32,14 @@ spec:
     spec:
       imagePullSecrets:
         - name: ghcr-pull
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mms-rollout-router
+  namespace: mms
+spec:
+  template:
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull

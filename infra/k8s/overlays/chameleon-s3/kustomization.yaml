@@ -15,10 +15,13 @@ namespace: mms
 resources:
   - ../../namespace.yaml
   - ../../configmap.yaml
+  - ../../feedback-pvc.yaml
   - ../../postgres.yaml
   - ../../mlflow.yaml
   - ../../model-serve.yaml
   - ../../model-serve-canary.yaml
+  - ../../rollout-router.yaml
+  - ../../rollout-controller.yaml
   - ../../job-seed-toy-model.yaml
 images:
   - name: mealie-model-serve-mlflow
@@ -30,6 +33,7 @@ images:
 patches:
   - path: ../../patches/ghcr-imagepull.yaml
   - path: ../../patches/ghcr-imagepull-job.yaml
+  - path: ../../patches/ghcr-imagepull-cronjob.yaml
   - path: patch-hostnetwork-egress.yaml
   - path: patch-deployment-recreate.yaml
   - path: patch-hostaliases-chi-uc.yaml
@@ -78,6 +82,14 @@ patches:
   - target:
       kind: Deployment
       name: mms-model-serve-canary
+      namespace: mms
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+  - target:
+      kind: Deployment
+      name: mms-rollout-router
       namespace: mms
     patch: |-
       - op: replace

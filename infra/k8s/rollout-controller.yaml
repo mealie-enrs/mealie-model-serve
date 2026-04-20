@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mms-rollout-controller
+  namespace: mms
+spec:
+  schedule: "*/10 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: rollout-controller
+              image: ghcr.io/mealie-enrs/mealie-model-serve-api:latest
+              imagePullPolicy: IfNotPresent
+              command:
+                - python
+                - /app/ops/rollout_controller.py
+                - --mode
+                - monitor
+              env:
+                - name: MLFLOW_TRACKING_URI
+                  valueFrom:
+                    configMapKeyRef:
+                      name: mms-config
+                      key: MLFLOW_TRACKING_URI
+                - name: PRODUCTION_URL
+                  value: "http://mms-model-serve:8080"
+                - name: CANARY_URL
+                  value: "http://mms-model-serve-canary:8080"
+                - name: ROUTER_URL
+                  value: "http://mms-rollout-router:8082"
+                - name: ROLLOUT_MODEL_NAME
+                  value: "food-classifier"
