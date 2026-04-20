@@ -25,9 +25,11 @@ The controller policy lives at `ops/rollout_policy.json`.
 On each monitor cycle it:
 
 1. benchmarks production and canary
-2. compares canary latency/error rate against production
-3. promotes `production` to the canary model version if thresholds pass
-4. resets router canary traffic back to the stable weight after promotion
+2. checks whether the live canary service is still serving `models:/<model>@canary`
+3. reloads the canary service automatically if the MLflow `@canary` alias moved or the service drifted
+4. compares canary latency/error rate against production
+5. promotes `production` to the canary model version if thresholds pass
+6. resets router canary traffic back to the stable weight after promotion
 
 ## Automatic rollback triggers
 

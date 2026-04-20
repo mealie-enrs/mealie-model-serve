@@ -81,6 +81,14 @@ def _set_alias(client: MlflowClient, model: str, alias: str, version: str) -> No
     client.set_registered_model_alias(model, alias, version)
 
 
+def _get_alias_version(client: MlflowClient, model: str, alias: str) -> str | None:
+    try:
+        mv = client.get_model_version_by_alias(model, alias)
+    except Exception:  # noqa: BLE001
+        return None
+    return str(mv.version)
+
+
 def _fetch_json(url: str) -> dict[str, Any]:
     response = httpx.get(url, timeout=20.0)
     response.raise_for_status()
@@ -167,6 +175,49 @@ def _monitor(args: argparse.Namespace, policy: dict[str, Any]) -> int:
     canary_meta = _fetch_json(f"{args.canary_url.rstrip('/')}/metadata")
     tags = _get_registered_tags(client, args.model)
     last_good = tags.get("last_good_production_version")
+    target_canary_model_uri = f"models:/{args.model}@canary"
+    target_canary_version = _get_alias_version(client, args.model, "canary")
+
+    canary_is_stale = (
+        canary_meta.get("model_alias") != "canary"
+        or canary_meta.get("model_uri") != target_canary_model_uri
+        or (
+            target_canary_version is not None
+            and str(canary_meta.get("model_version")) != target_canary_version
+        )
+    )
+
+    if canary_is_stale:
+        reload_result = _reload(args.canary_url, target_canary_model_uri)
+        canary_meta = _fetch_json(f"{args.canary_url.rstrip('/')}/metadata")
+        if canary_meta.get("model_alias") != "canary" or canary_meta.get("model_uri") != target_canary_model_uri:
+            print(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "action": "canary_refresh_failed",
+                        "target_model_uri": target_canary_model_uri,
+                        "target_version": target_canary_version,
+                        "reload_result": reload_result,
+                        "canary_metadata": canary_meta,
+                    },
+                    indent=2,
+                )
+            )
+            return 1
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "action": "canary_refreshed",
+                    "target_model_uri": target_canary_model_uri,
+                    "target_version": target_canary_version,
+                    "reload_result": reload_result,
+                    "canary_metadata": canary_meta,
+                },
+                indent=2,
+            )
+        )
 
     if str(prod_meta["model_version"]) != str(canary_meta["model_version"]):
         _set_router_weight(args.router_url, float(policy["router"]["trial_canary_weight"]))
